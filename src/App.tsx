@@ -67,8 +67,8 @@ export default function App() {
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
-  const [selectedExpertise, setSelectedExpertise] = useState<string[]>([]);
+  const [graduatedFrom, setGraduatedFrom] = useState('');
+  const [graduatedTo, setGraduatedTo] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -78,6 +78,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -85,8 +86,8 @@ export default function App() {
 
   const handleReset = () => {
     setSearchQuery('');
-    setSelectedStatus([]);
-    setSelectedExpertise([]);
+    setGraduatedFrom('');
+    setGraduatedTo('');
     setSelectedContacts([]);
   };
 
@@ -128,12 +129,7 @@ export default function App() {
 
   const handleDelete = () => {
     if (selectedContacts.length > 0) {
-      if (confirm(`Are you sure you want to delete ${selectedContacts.length} contact(s)?`)) {
-        const toArchive = contacts.filter((c) => selectedContacts.includes(c.id));
-        setArchivedContacts([...archivedContacts, ...toArchive]);
-        setContacts(contacts.filter((c) => !selectedContacts.includes(c.id)));
-        setSelectedContacts([]);
-      }
+      setShowDeleteConfirm(true);
     }
   };
 
@@ -191,6 +187,37 @@ export default function App() {
   const handlePermanentDeleteEvent = (eventId: string) => {
     setArchivedEvents(archivedEvents.filter((e) => e.id !== eventId));
   };
+
+  const filteredContacts = contacts.filter((contact) => {
+    const query = searchQuery.trim().toLowerCase();
+    const matchesQuery = query
+      ? [
+          contact.name,
+          contact.college,
+          contact.program,
+          contact.email,
+          contact.occupation,
+          contact.company,
+        ]
+          .filter(Boolean)
+          .some((field) => field!.toLowerCase().includes(query))
+      : true;
+
+    const hasFrom = Boolean(graduatedFrom);
+    const hasTo = Boolean(graduatedTo);
+    const graduatedDate = contact.dateGraduated ? new Date(contact.dateGraduated) : null;
+
+    const matchesDate = (() => {
+      if (!hasFrom && !hasTo) return true;
+      if (!graduatedDate) return false;
+
+      const fromOk = hasFrom ? graduatedDate >= new Date(graduatedFrom) : true;
+      const toOk = hasTo ? graduatedDate <= new Date(graduatedTo) : true;
+      return fromOk && toOk;
+    })();
+
+    return matchesQuery && matchesDate;
+  });
 
   // Show login page if not logged in
   if (!isLoggedIn) {
@@ -265,16 +292,16 @@ export default function App() {
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
                   onReset={handleReset}
-                  selectedStatus={selectedStatus}
-                  setSelectedStatus={setSelectedStatus}
-                  selectedExpertise={selectedExpertise}
-                  setSelectedExpertise={setSelectedExpertise}
+                  graduatedFrom={graduatedFrom}
+                  graduatedTo={graduatedTo}
+                  setGraduatedFrom={setGraduatedFrom}
+                  setGraduatedTo={setGraduatedTo}
                 />
               </div>
 
               {/* Table */}
               <ContactsTable
-                contacts={contacts}
+                contacts={filteredContacts}
                 selectedContacts={selectedContacts}
                 setSelectedContacts={setSelectedContacts}
                 onViewContact={handleViewContact}
@@ -306,6 +333,7 @@ export default function App() {
       {showForm && (
         <ContactForm
           contact={editingContact}
+          existingContacts={contacts}
           onClose={handleCloseForm}
           onSave={handleSaveContact}
         />
@@ -354,6 +382,42 @@ export default function App() {
           selectedContacts={selectedContacts}
           onClose={() => setShowExport(false)}
         />
+      )}
+
+      {/* Delete confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-900">Delete contacts?</h3>
+            <p className="text-gray-600">
+              This will move {selectedContacts.length} contact(s) to archives. You can restore them later.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setArchivedContacts((prev) => [
+                    ...prev,
+                    ...contacts.filter((c) => selectedContacts.includes(c.id)),
+                  ]);
+                  setContacts((prev) => prev.filter((c) => !selectedContacts.includes(c.id)));
+                  setSelectedContacts([]);
+                  setShowDeleteConfirm(false);
+                }}
+                className="px-5 py-2.5 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

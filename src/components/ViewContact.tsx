@@ -1,4 +1,4 @@
-import { ArrowLeft, X, Mail, Phone, Building2, GraduationCap, Briefcase, Calendar } from 'lucide-react';
+import { X, Mail, Phone, Building2, GraduationCap, Briefcase, Calendar } from 'lucide-react';
 
 interface Contact {
   id: string;
@@ -31,17 +31,12 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-[#FF2B5E] hover:bg-pink-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
+          <div />
           <h2 className="text-xl font-semibold text-gray-900">Contact Details</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 p-2"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>

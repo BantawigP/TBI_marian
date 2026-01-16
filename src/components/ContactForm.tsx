@@ -1,14 +1,15 @@
-import { ArrowLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useState } from 'react';
 import type { Contact, ContactStatus } from '../types';
 
 interface ContactFormProps {
   contact?: Contact | null;
+  existingContacts: Contact[];
   onClose: () => void;
   onSave: (contact: Contact) => void;
 }
 
-export function ContactForm({ contact, onClose, onSave }: ContactFormProps) {
+export function ContactForm({ contact, existingContacts, onClose, onSave }: ContactFormProps) {
   const [formData, setFormData] = useState<Contact>({
     id: contact?.id || '',
     firstName: contact?.firstName || '',
@@ -23,6 +24,8 @@ export function ContactForm({ contact, onClose, onSave }: ContactFormProps) {
     company: contact?.company || '',
     status: contact?.status || 'Pending',
   });
+  const [autoGenerateId, setAutoGenerateId] = useState(!contact?.id);
+  const [error, setError] = useState('');
 
   const handleChange = (field: keyof Contact, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -30,12 +33,31 @@ export function ContactForm({ contact, onClose, onSave }: ContactFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const resolvedId = autoGenerateId || !formData.id.trim() ? Date.now().toString() : formData.id.trim();
     const normalized: Contact = {
       ...formData,
-      id: formData.id || Date.now().toString(),
+      id: resolvedId,
       name: `${formData.firstName} ${formData.lastName}`.trim(),
     };
 
+    const duplicateId = existingContacts.find(
+      (c) => c.id === normalized.id && c.id !== contact?.id
+    );
+    const duplicateEmail = existingContacts.find(
+      (c) => c.email.toLowerCase() === normalized.email.toLowerCase() && c.id !== contact?.id
+    );
+
+    if (duplicateId) {
+      setError('ID already exists. Please use a unique ID or enable auto-generate.');
+      return;
+    }
+
+    if (duplicateEmail) {
+      setError('Email already exists. Please use a unique email.');
+      return;
+    }
+
+    setError('');
     onSave(normalized);
   };
 
@@ -46,19 +68,14 @@ export function ContactForm({ contact, onClose, onSave }: ContactFormProps) {
       <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-[#FF2B5E] hover:bg-pink-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-          <h2 className="text-xl font-semibold text-gray-900">
+          <div />
+          <h2 className="text-xl font-semibold text-gray-900 text-center flex-1">
             {isEditMode ? 'Edit Contact' : 'New Contact'}
           </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 p-2"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -67,6 +84,12 @@ export function ContactForm({ contact, onClose, onSave }: ContactFormProps) {
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto space-y-6">
+            {error && (
+              <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 text-sm">
+                {error}
+              </div>
+            )}
+
             {/* Contact Info Section */}
             <div>
               <h3 className="text-[#FF2B5E] text-sm mb-4 uppercase tracking-wide">
@@ -74,6 +97,30 @@ export function ContactForm({ contact, onClose, onSave }: ContactFormProps) {
               </h3>
               
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-[#FF2B5E] mb-2">Contact ID</label>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <input
+                      type="text"
+                      value={formData.id}
+                      onChange={(e) => !autoGenerateId && handleChange('id', e.target.value)}
+                      disabled={autoGenerateId}
+                      placeholder="Enter ID or auto-generate"
+                      className="flex-1 min-w-[200px] px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent disabled:opacity-70"
+                      required={!autoGenerateId}
+                    />
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoGenerateId}
+                        onChange={(e) => setAutoGenerateId(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                      />
+                      Auto-generate ID
+                    </label>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm text-[#FF2B5E] mb-2">
                     First Name

@@ -1,4 +1,4 @@
-import { ArrowLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useState } from 'react';
 import type { Contact, Event } from '../types';
 
@@ -57,24 +57,18 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-[#FF2B5E] hover:bg-pink-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
+          <div />
           <h2 className="text-xl font-semibold text-gray-900">Create Event</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form Content */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
             {/* Left Column - Event Details */}
             <div className="space-y-6">
@@ -220,7 +214,7 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
               </div>
             </div>
           </div>
-        </form>
+        </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
@@ -238,7 +232,7 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
             Create Event
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

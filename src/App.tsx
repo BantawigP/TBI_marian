@@ -73,6 +73,8 @@ const cleanPhone = (value?: string | null) => {
   return digits || null;
 };
 
+const isRlsViolation = (error: any) => error?.code === '42501';
+
 const parseYearFromDate = (value?: string | null) => {
   if (!value) return null;
   const year = new Date(value).getFullYear();
@@ -94,6 +96,10 @@ const ensureIdByName = async (
     .maybeSingle();
 
   if (selectError && selectError.code !== 'PGRST116') {
+    if (isRlsViolation(selectError)) {
+      console.warn(`Supabase RLS prevented reading ${table}. Falling back to null.`);
+      return null;
+    }
     throw selectError;
   }
 
@@ -108,6 +114,10 @@ const ensureIdByName = async (
     .single();
 
   if (error) {
+    if (isRlsViolation(error)) {
+      console.warn(`Supabase RLS prevented inserting into ${table}. Falling back to null.`);
+      return null;
+    }
     throw error;
   }
 
@@ -214,7 +224,7 @@ export default function App() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
+        'event_id,title,description,event_date,event_time,location,location_id,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
       );
 
     if (error) {
@@ -276,16 +286,23 @@ export default function App() {
   const persistEventToSupabase = async (event: Event) => {
     const locationId = await ensureIdByName('locations', 'name', 'location_id', event.location);
 
+    const payload: Record<string, any> = {
+      title: event.title,
+      description: event.description,
+      event_date: event.date,
+      event_time: event.time,
+    };
+
+    if (locationId) {
+      payload.location_id = locationId;
+    } else {
+      payload.location = event.location;
+    }
+
     const { data, error } = await supabase
       .from('events')
-      .insert({
-        title: event.title,
-        description: event.description,
-        event_date: event.date,
-        event_time: event.time,
-        location_id: locationId,
-      })
-      .select('event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country)')
+      .insert(payload)
+      .select('event_id,title,description,event_date,event_time,location,location_id,locations(location_id,name,city,country)')
       .single();
 
     if (error) {

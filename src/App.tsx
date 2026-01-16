@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Login } from './components/Login';
 import { Sidebar } from './components/Sidebar';
 import { Home } from './components/Home';
@@ -13,7 +13,8 @@ import { ImportContact } from './components/ImportContact';
 import { ExportContact } from './components/ExportContact';
 import { SearchBar } from './components/SearchBar';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
-import type { Contact, Event } from './types';
+import type { Contact, ContactStatus, Event } from './types';
+import { supabase } from './lib/supabaseClient';
 
 const initialContacts: Contact[] = [
   {
@@ -59,10 +60,125 @@ const initialContacts: Contact[] = [
     company: 'DevSolutions',
   },
 ];
+const defaultStatus: ContactStatus = 'Contacted';
+
+const numberOrNull = (value: string | number | undefined | null) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const cleanPhone = (value?: string | null) => {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, '');
+  return digits || null;
+};
+
+const parseYearFromDate = (value?: string | null) => {
+  if (!value) return null;
+  const year = new Date(value).getFullYear();
+  return Number.isFinite(year) ? year : null;
+};
+
+const ensureIdByName = async (
+  table: string,
+  nameColumn: string,
+  idColumn: string,
+  value?: string | null
+): Promise<number | null> => {
+  if (!value) return null;
+
+  const { data: existing, error: selectError } = await supabase
+    .from(table)
+    .select(idColumn)
+    .eq(nameColumn, value)
+    .maybeSingle();
+
+  if (selectError && selectError.code !== 'PGRST116') {
+    throw selectError;
+  }
+
+  if (existing && (existing as Record<string, any>)[idColumn] != null) {
+    return (existing as Record<string, any>)[idColumn] as number;
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .upsert({ [nameColumn]: value }, { onConflict: nameColumn })
+    .select(idColumn)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as Record<string, any> | null)?.[idColumn] ?? null;
+};
+
+const mapContactRowToContact = (row: Record<string, any>): Contact => {
+  const firstName = row.f_name ?? row.F_name ?? row.first_name ?? row.firstName ?? '';
+  const lastName = row.l_name ?? row.L_name ?? row.last_name ?? row.lastName ?? '';
+
+  const collegeId = row.college_id ?? row.colleges?.college_id ?? null;
+  const programId = row.program_id ?? row.programs?.program_id ?? null;
+  const companyId = row.company_id ?? row.companies?.company_id ?? null;
+  const occupationId = row.occupation_id ?? row.occupations?.occupation_id ?? null;
+
+  return {
+    id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
+    firstName,
+    lastName,
+    name: row.full_name ?? row.name ?? `${firstName} ${lastName}`.trim(),
+    college: row.college ?? row.college_name ?? row.colleges?.college_name ?? '',
+    program: row.program ?? row.program_name ?? row.programs?.program_name ?? '',
+    email: row.email ?? '',
+    status: (row.status ?? defaultStatus) as ContactStatus,
+    contactNumber: row.contact_number
+      ? row.contact_number.toString()
+      : row.contactNumber ?? '',
+    dateGraduated: row.date_graduated ?? '',
+    occupation:
+      row.occupation ?? row.occupation_title ?? row.occupations?.occupation_title ?? '',
+    company: row.company ?? row.company_name ?? row.companies?.company_name ?? '',
+    collegeId: collegeId ?? undefined,
+    programId: programId ?? undefined,
+    companyId: companyId ?? undefined,
+    occupationId: occupationId ?? undefined,
+  };
+};
+
+const mapEventRowToEvent = (row: Record<string, any>): Event => {
+  const attendees = (row.event_participants ?? [])
+    .map((participant: any) => {
+      const alumni = participant.alumni ?? participant.alumni_id ?? participant.alumniRow;
+      return alumni ? mapContactRowToContact(alumni) : null;
+    })
+    .filter(Boolean) as Contact[];
+
+  const locationName =
+    row.locations?.name ??
+    row.location_name ??
+    row.location ??
+    (row.locations?.city
+      ? `${row.locations.city}${row.locations.country ? `, ${row.locations.country}` : ''}`
+      : '');
+
+  return {
+    id: (row.event_id ?? row.id)?.toString() ?? Date.now().toString(),
+    title: row.title ?? '',
+    description: row.description ?? '',
+    date: row.event_date ?? row.date ?? '',
+    time: row.event_time ?? row.time ?? '',
+    location: locationName || 'TBD',
+    locationId: row.location_id ?? row.locations?.location_id ?? undefined,
+    attendees,
+  };
+};
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
@@ -80,8 +196,221 @@ export default function App() {
   const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
+    const { data, error } = await supabase
+      .from('alumni')
+      .select(
+        'alumni_id,f_name,l_name,year_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)'
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(mapContactRowToContact);
+  };
+
+  const fetchEventsFromSupabase = async (): Promise<Event[]> => {
+    const { data, error } = await supabase
+      .from('events')
+      .select(
+        'event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(mapEventRowToEvent);
+  };
+
+  const persistContactToSupabase = async (contact: Contact) => {
+    const [collegeId, programId, companyId, occupationId] = await Promise.all([
+      ensureIdByName('colleges', 'college_name', 'college_id', contact.college),
+      ensureIdByName('programs', 'program_name', 'program_id', contact.program),
+      ensureIdByName('companies', 'company_name', 'company_id', contact.company),
+      ensureIdByName('occupations', 'occupation_title', 'occupation_id', contact.occupation),
+    ]);
+
+    const payload: Record<string, any> = {
+      f_name: contact.firstName,
+      l_name: contact.lastName,
+      year_graduated: parseYearFromDate(contact.dateGraduated),
+      email: contact.email,
+      college_id: collegeId,
+      program_id: programId,
+      company_id: companyId,
+      occupation_id: occupationId,
+      contact_number: cleanPhone(contact.contactNumber),
+    };
+
+    const alumniId = numberOrNull(contact.id);
+    if (alumniId) {
+      payload.alumni_id = alumniId;
+    }
+
+    const { data, error } = await supabase
+      .from('alumni')
+      .upsert(payload, { onConflict: 'alumni_id' })
+      .select(
+        'alumni_id,f_name,l_name,year_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)'
+      )
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return mapContactRowToContact(data);
+  };
+
+  const persistContactsBatch = async (items: Contact[]) => {
+    const saved: Contact[] = [];
+    for (const item of items) {
+      const savedContact = await persistContactToSupabase(item);
+      saved.push(savedContact);
+    }
+    return saved;
+  };
+
+  const persistEventToSupabase = async (event: Event) => {
+    const locationId = await ensureIdByName('locations', 'name', 'location_id', event.location);
+
+    const { data, error } = await supabase
+      .from('events')
+      .insert({
+        title: event.title,
+        description: event.description,
+        event_date: event.date,
+        event_time: event.time,
+        location_id: locationId,
+      })
+      .select('event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country)')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    const eventId = data?.event_id ?? null;
+
+    const attendeeRows = (event.attendees ?? [])
+      .map((attendee) => numberOrNull(attendee.id))
+      .filter((id): id is number => Boolean(id))
+      .map((alumniId) => ({ event_id: eventId, alumni_id: alumniId }));
+
+    if (eventId && attendeeRows.length > 0) {
+      const { error: attendeeError } = await supabase
+        .from('event_participants')
+        .upsert(attendeeRows, { onConflict: 'event_id,alumni_id' });
+      if (attendeeError) {
+        throw attendeeError;
+      }
+    }
+
+    return mapEventRowToEvent({
+      ...data,
+      event_participants: event.attendees.map((attendee) => ({ alumni: attendee })),
+    });
+  };
+
+  const persistEventAttendees = async (eventId: string, attendees: Contact[]) => {
+    const numericEventId = numberOrNull(eventId);
+    if (!numericEventId) return;
+
+    const rows = attendees
+      .map((attendee) => numberOrNull(attendee.id))
+      .filter((id): id is number => Boolean(id))
+      .map((alumniId) => ({ event_id: numericEventId, alumni_id: alumniId }));
+
+    if (rows.length === 0) return;
+
+    const { error } = await supabase
+      .from('event_participants')
+      .upsert(rows, { onConflict: 'event_id,alumni_id' });
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  const deleteEventFromSupabase = async (eventId: string) => {
+    const numericEventId = numberOrNull(eventId);
+    if (!numericEventId) return;
+
+    const { error } = await supabase.from('events').delete().eq('event_id', numericEventId);
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let isMounted = true;
+
+    const loadData = async () => {
+      setIsSyncing(true);
+      setSyncError(null);
+
+      try {
+        const [loadedContacts, loadedEvents] = await Promise.all([
+          fetchContactsFromSupabase(),
+          fetchEventsFromSupabase(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (loadedContacts.length > 0) {
+          setContacts(loadedContacts);
+        }
+
+        setEvents(loadedEvents);
+      } catch (error) {
+        console.error('Supabase: failed to load data', error);
+        if (isMounted) {
+          setSyncError('Unable to load some data from Supabase. Showing local data.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoggedIn]);
+
   const handleLogin = () => {
     setIsLoggedIn(true);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      // Clear any persisted browser data after sign-out
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (error) {
+      console.error('Supabase: failed to sign out', error);
+    }
+
+    setIsLoggedIn(false);
+    setActiveTab('home');
+    setShowForm(false);
+    setEditingContact(null);
+    setViewingContact(null);
+    setShowImport(false);
+    setShowExport(false);
+    setSelectedContacts([]);
+    setShowCreateEvent(false);
+    setViewingEvent(null);
+    setShowDeleteConfirm(false);
   };
 
   const handleReset = () => {
@@ -101,21 +430,48 @@ export default function App() {
     setShowForm(true);
   };
 
-  const handleSaveContact = (contact: Contact) => {
+  const handleSaveContact = async (contact: Contact) => {
     const normalizedContact: Contact = {
       ...contact,
       name: `${contact.firstName} ${contact.lastName}`.trim(),
+      dateGraduated: contact.dateGraduated || '',
     };
 
-    if (editingContact) {
-      // Update existing contact
-      setContacts(contacts.map((c) => (c.id === normalizedContact.id ? normalizedContact : c)));
-    } else {
-      // Add new contact
-      setContacts([...contacts, normalizedContact]);
-    }
+    const editingId = editingContact?.id;
+
+    // Optimistically update UI
+    setContacts((prev) =>
+      editingId
+        ? prev.map((c) => (c.id === editingId ? normalizedContact : c))
+        : [...prev, normalizedContact]
+    );
+
     setShowForm(false);
     setEditingContact(null);
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      const savedContact = await persistContactToSupabase(normalizedContact);
+
+      setContacts((prev) => {
+        if (editingId) {
+          return prev.map((c) => (c.id === editingId ? savedContact : c));
+        }
+
+        const hasSameEmail = prev.find((c) => c.email === savedContact.email);
+        if (hasSameEmail) {
+          return prev.map((c) => (c.email === savedContact.email ? savedContact : c));
+        }
+
+        return [...prev, savedContact];
+      });
+    } catch (error) {
+      console.error('Supabase: failed to save contact', error);
+      setSyncError('Saved locally but failed to sync contact to Supabase.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleCloseForm = () => {
@@ -140,20 +496,54 @@ export default function App() {
         setArchivedEvents([...archivedEvents, eventToArchive]);
       }
       setEvents(events.filter((e) => e.id !== eventId));
+
+      deleteEventFromSupabase(eventId).catch((error) => {
+        console.error('Supabase: failed to delete event', error);
+        setSyncError('Deleted locally but failed to delete event in Supabase.');
+      });
     }
   };
 
   const handleImportContacts = (importedContacts: Contact[]) => {
     setContacts([...contacts, ...importedContacts]);
+    setIsSyncing(true);
+
+    persistContactsBatch(importedContacts)
+      .then((saved) => {
+        if (!saved.length) return;
+
+        setContacts((prev) => {
+          const filtered = prev.filter(
+            (contact) => !saved.some((s) => s.id === contact.id || s.email === contact.email)
+          );
+          return [...filtered, ...saved];
+        });
+      })
+      .catch((error) => {
+        console.error('Supabase: failed to import contacts', error);
+        setSyncError('Imported locally but failed to sync new contacts to Supabase.');
+      })
+      .finally(() => setIsSyncing(false));
   };
 
   const handleViewContact = (contact: Contact) => {
     setViewingContact(contact);
   };
 
-  const handleCreateEvent = (event: Event) => {
-    setEvents([...events, event]);
-    setShowCreateEvent(false);
+  const handleCreateEvent = async (event: Event) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      const savedEvent = await persistEventToSupabase(event);
+      setEvents((prev) => [...prev, savedEvent]);
+      setShowCreateEvent(false);
+    } catch (error) {
+      console.error('Supabase: failed to create event', error);
+      setSyncError('Created locally but failed to save event to Supabase.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleViewEvent = (event: Event) => {
@@ -161,13 +551,18 @@ export default function App() {
   };
 
   const handleAddAttendees = (eventId: string, newAttendees: Contact[]) => {
-    setEvents(
-      events.map((event) =>
+    setEvents((prev) =>
+      prev.map((event) =>
         event.id === eventId
           ? { ...event, attendees: [...event.attendees, ...newAttendees] }
           : event
       )
     );
+
+    persistEventAttendees(eventId, newAttendees).catch((error) => {
+      console.error('Supabase: failed to add attendees', error);
+      setSyncError('Added attendees locally but failed to sync with Supabase.');
+    });
   };
 
   const handleRestoreContact = (contact: Contact) => {
@@ -226,10 +621,22 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#F5F1ED]">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
       
       <main className="flex-1 overflow-auto">
         <div className="max-w-[1400px] mx-auto p-8">
+          {isSyncing && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+              Syncing with Supabase...
+            </div>
+          )}
+
+          {syncError && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {syncError}
+            </div>
+          )}
+
           {activeTab === 'home' ? (
             <Home contacts={contacts} onViewContact={handleViewContact} />
           ) : activeTab === 'events' ? (

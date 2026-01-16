@@ -4,9 +4,10 @@ import logo from '../assets/marian tbi.jpg';
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onLogout: () => void;
 }
 
-export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
   const navItems = [
     { icon: Home, label: 'Home', value: 'home' },
     { icon: Users, label: 'Contacts', value: 'contacts' },
@@ -52,7 +53,10 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
       {/* Logout */}
       <div className="p-4 border-t border-white/10">
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
+        >
           <LogOut className="w-5 h-5" />
           <span>Logout</span>
         </button>

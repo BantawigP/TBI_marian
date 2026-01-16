@@ -1,5 +1,7 @@
 export type ContactStatus = 'Contacted' | 'Pending';
 
+// Frontend contact model mapped from the Supabase alumni schema
+// plus resolved dimension names for college/program/company/occupation.
 export interface Contact {
   id: string;
   firstName: string;
@@ -13,8 +15,13 @@ export interface Contact {
   dateGraduated?: string;
   occupation?: string;
   company?: string;
+  collegeId?: number;
+  programId?: number;
+  companyId?: number;
+  occupationId?: number;
 }
 
+// Frontend event model mapped from the Supabase events schema.
 export interface Event {
   id: string;
   title: string;
@@ -22,5 +29,6 @@ export interface Event {
   date: string;
   time: string;
   location: string;
+  locationId?: number;
   attendees: Contact[];
 }

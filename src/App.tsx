@@ -16,50 +16,8 @@ import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event } from './types';
 import { supabase } from './lib/supabaseClient';
 
-const initialContacts: Contact[] = [
-  {
-    id: '111',
-    firstName: 'Maria',
-    lastName: 'Santos',
-    name: 'Maria Santos',
-    college: 'Business',
-    program: 'Marketing',
-    email: 'maria@example.com',
-    status: 'Contacted',
-    contactNumber: '+63 912 345 6789',
-    dateGraduated: '2023-05-15',
-    occupation: 'Marketing Manager',
-    company: 'Tech Corp',
-  },
-  {
-    id: '112',
-    firstName: 'Jose',
-    lastName: 'Rivera',
-    name: 'Jose Rivera',
-    college: 'Engineering',
-    program: 'Mechanical',
-    email: 'jose@example.com',
-    status: 'Pending',
-    contactNumber: '+63 923 456 7890',
-    dateGraduated: '2022-06-20',
-    occupation: 'Mechanical Engineer',
-    company: 'AutoWorks Inc',
-  },
-  {
-    id: '113',
-    firstName: 'Ana',
-    lastName: 'Cruz',
-    name: 'Ana Cruz',
-    college: 'IT',
-    program: 'Computer Science',
-    email: 'ana@example.com',
-    status: 'Contacted',
-    contactNumber: '+63 934 567 8901',
-    dateGraduated: '2023-03-10',
-    occupation: 'Software Developer',
-    company: 'DevSolutions',
-  },
-];
+// Mock contacts - these will be replaced by database contacts after login
+const initialContacts: Contact[] = [];
 const defaultStatus: ContactStatus = 'Contacted';
 
 const numberOrNull = (value: string | number | undefined | null) => {
@@ -123,8 +81,9 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
   const companyId = row.company_id ?? row.companies?.company_id ?? null;
   const occupationId = row.occupation_id ?? row.occupations?.occupation_id ?? null;
 
-  return {
-    id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
+   return {
+     id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
+     alumniId: numberOrNull(row.alumni_id) || undefined,
     firstName,
     lastName,
     name: row.full_name ?? row.name ?? `${firstName} ${lastName}`.trim(),
@@ -535,12 +494,20 @@ export default function App() {
     setSyncError(null);
 
     try {
-      const savedEvent = await persistEventToSupabase(event);
-      setEvents((prev) => [...prev, savedEvent]);
+      console.log('App - handleCreateEvent received event:', {
+        id: event.id,
+        title: event.title,
+        attendeeCount: event.attendees.length,
+        attendees: event.attendees.map(a => ({ id: a.id, name: a.name, alumniId: a.alumniId }))
+      });
+
+      // Event is already saved to database by createEvent()
+      // Just add it to the local state
+      setEvents((prev) => [...prev, event]);
       setShowCreateEvent(false);
-    } catch (error) {
-      console.error('Supabase: failed to create event', error);
-      setSyncError('Created locally but failed to save event to Supabase.');
+    } catch (err) {
+      console.error('Failed to add event', err);
+      setSyncError('Failed to add event.');
     } finally {
       setIsSyncing(false);
     }

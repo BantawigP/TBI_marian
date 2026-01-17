@@ -19,6 +19,7 @@ export interface Contact {
   programId?: number;
   companyId?: number;
   occupationId?: number;
+  alumniId?: number;
 }
 
 // Frontend event model mapped from the Supabase events schema.

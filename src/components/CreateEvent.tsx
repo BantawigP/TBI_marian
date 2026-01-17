@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import type { Contact, Event } from '../types';
+import { createEvent } from '../lib/eventService';
 
 interface CreateEventProps {
   contacts: Contact[];
@@ -19,6 +20,15 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
 
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  console.log('CreateEvent - Available contacts:', contacts.map(c => ({
+    id: c.id,
+    name: c.name,
+    alumniId: c.alumniId,
+    status: c.status
+  })));
 
   // Filter only contacted people
   const contactedPeople = contacts.filter((c) => c.status === 'Contacted');
@@ -40,19 +50,44 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const attendees = contactedPeople.filter((c) =>
-      selectedAttendees.includes(c.id)
-    );
+    setLoading(true);
+    setError(null);
 
-    const newEvent: Event = {
-      id: Date.now().toString(),
-      ...formData,
-      attendees,
-    };
+    try {
+      const attendees = contactedPeople.filter((c) =>
+        selectedAttendees.includes(c.id)
+      );
 
-    onSave(newEvent);
+      console.log('CreateEvent - Selected attendees:', attendees.map(a => ({ 
+        id: a.id, 
+        name: a.name, 
+        alumniId: a.alumniId 
+      })));
+
+      // Call the database function to create the event
+      const createdEvent = await createEvent(formData, attendees);
+      
+      console.log('CreateEvent - Received event from createEvent:', {
+        id: createdEvent.id,
+        title: createdEvent.title,
+        attendeeCount: createdEvent.attendees.length,
+        attendees: createdEvent.attendees.map(a => ({ id: a.id, name: a.name }))
+      });
+
+      // Call the parent's onSave callback with the created event
+      onSave(createdEvent);
+      
+      // Close the modal after successful creation
+      onClose();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create event';
+      setError(errorMessage);
+      console.error('Event creation error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -69,6 +104,11 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
 
         {/* Form Content */}
         <div className="flex-1 overflow-y-auto">
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 m-4 rounded">
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
             {/* Left Column - Event Details */}
             <div className="space-y-6">
@@ -221,15 +261,24 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={loading}
+            className="px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-6 py-3 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
+            disabled={loading}
+            className="px-6 py-3 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Create Event
+            {loading ? (
+              <>
+                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                Creating...
+              </>
+            ) : (
+              'Create Event'
+            )}
           </button>
         </div>
       </form>

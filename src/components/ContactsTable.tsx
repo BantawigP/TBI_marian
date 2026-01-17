@@ -47,6 +47,8 @@ export function ContactsTable({
               <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">Name</th>
               <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">College</th>
               <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">Program</th>
+              <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">Company</th>
+              <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">Occupation</th>
               <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">Email</th>
               <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">Status</th>
             </tr>
@@ -79,6 +81,8 @@ export function ContactsTable({
                 </td>
                 <td className="p-4 text-gray-600">{contact.college}</td>
                 <td className="p-4 text-gray-600">{contact.program}</td>
+                <td className="p-4 text-gray-600">{contact.company ?? '—'}</td>
+                <td className="p-4 text-gray-600">{contact.occupation ?? '—'}</td>
                 <td className="p-4 text-gray-600">{contact.email}</td>
                 <td className="p-4">
                   <span

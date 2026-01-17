@@ -1,5 +1,5 @@
 import { ArrowLeft, X, Download, FileSpreadsheet, Check } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Contact } from '../types';
 
 interface ExportContactProps {
@@ -33,11 +33,36 @@ export function ExportContact({ contacts, selectedContacts, onClose }: ExportCon
     { key: 'occupation', label: 'Occupation' },
     { key: 'company', label: 'Company' },
     { key: 'status', label: 'Status' },
+    { key: 'address', label: 'Address' },
+    { key: 'id', label: 'Alumni ID' },
   ];
 
-  const exportContacts = selectedContacts.length > 0
-    ? contacts.filter((c) => selectedContacts.includes(c.id))
-    : contacts;
+  const exportContacts = useMemo(
+    () => (selectedContacts.length > 0
+      ? contacts.filter((c) => selectedContacts.includes(c.id))
+      : contacts),
+    [contacts, selectedContacts]
+  );
+
+  const fieldLabel = (field: string) => availableFields.find((f) => f.key === field)?.label ?? field;
+
+  const buildDelimited = (delimiter: string, rows: Array<Record<string, any>>) => {
+    const header = selectedFields.map((field) => `"${fieldLabel(field).replace(/"/g, '""')}"`).join(delimiter);
+    const body = rows
+      .map((row) =>
+        selectedFields
+          .map((field) => {
+            const raw = row[field] ?? '';
+            const value = typeof raw === 'string' ? raw : raw?.toString?.() ?? '';
+            const escaped = value.replace(/"/g, '""');
+            return `"${escaped}"`;
+          })
+          .join(delimiter)
+      )
+      .join('\n');
+
+    return [header, body].filter(Boolean).join('\n');
+  };
 
   const toggleField = (field: string) => {
     setSelectedFields((prev) =>
@@ -48,20 +73,48 @@ export function ExportContact({ contacts, selectedContacts, onClose }: ExportCon
   };
 
   const handleExport = () => {
-    // Simulate export functionality
-    const dataToExport = exportContacts.map((contact) => {
-      const exportData: any = {};
+    if (selectedFields.length === 0 || exportContacts.length === 0) {
+      return;
+    }
+
+    const rows = exportContacts.map((contact) => {
+      const exportRow: Record<string, any> = {};
       selectedFields.forEach((field) => {
-        exportData[field] = (contact as any)[field] || '';
+        exportRow[field] = (contact as Record<string, any>)[field] ?? '';
       });
-      return exportData;
+      return exportRow;
     });
 
-    console.log('Exporting data:', dataToExport);
-    console.log('Format:', format);
-    
-    // In a real implementation, you would generate the file here
-    alert(`Exporting ${dataToExport.length} contacts as ${format.toUpperCase()}`);
+    const formatConfig: Record<ExportFormat, { mime: string; extension: string; build: () => string }> = {
+      csv: {
+        mime: 'text/csv;charset=utf-8;',
+        extension: 'csv',
+        build: () => buildDelimited(',', rows),
+      },
+      excel: {
+        mime: 'application/vnd.ms-excel',
+        extension: 'xls',
+        build: () => buildDelimited('\t', rows),
+      },
+      json: {
+        mime: 'application/json;charset=utf-8;',
+        extension: 'json',
+        build: () => JSON.stringify(rows, null, 2),
+      },
+    };
+
+    const { mime, extension, build } = formatConfig[format];
+    const content = build();
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `contacts_export.${extension}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+
     onClose();
   };
 

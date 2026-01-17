@@ -113,7 +113,10 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent }: Ev
                     {onDeleteEvent && (
                       <button
                         type="button"
-                        onClick={() => onDeleteEvent(event.id)}
+                        onClick={() => {
+                          console.log('🔴 Delete button clicked in Events.tsx for event:', event.id, event.title);
+                          onDeleteEvent(event.id);
+                        }}
                         className="ml-3 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete event"
                       >

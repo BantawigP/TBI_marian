@@ -247,7 +247,7 @@ export default function App() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'event_id,title,description,event_date,event_time_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
+        'event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
       )
       .or('is_active.eq.true,is_active.is.null'); // Only fetch active events
 
@@ -340,54 +340,6 @@ export default function App() {
       saved.push(savedContact);
     }
     return saved;
-  };
-
-  const persistEventToSupabase = async (event: Event) => {
-    const locationId = await ensureIdByName('locations', 'name', 'location_id', event.location);
-
-    const payload: Record<string, any> = {
-      title: event.title,
-      description: event.description,
-      event_date: event.date,
-      event_time: event.time,
-    };
-
-    if (locationId) {
-      payload.location_id = locationId;
-    } else {
-      payload.location = event.location;
-    }
-
-    const { data, error } = await supabase
-      .from('events')
-      .insert(payload)
-      .select('event_id,title,description,event_date,event_time,location,location_id,locations(location_id,name,city,country)')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    const eventId = data?.event_id ?? null;
-
-    const attendeeRows = (event.attendees ?? [])
-      .map((attendee) => numberOrNull(attendee.id))
-      .filter((id): id is number => Boolean(id))
-      .map((alumniId) => ({ event_id: eventId, alumni_id: alumniId }));
-
-    if (eventId && attendeeRows.length > 0) {
-      const { error: attendeeError } = await supabase
-        .from('event_participants')
-        .upsert(attendeeRows, { onConflict: 'event_id,alumni_id' });
-      if (attendeeError) {
-        throw attendeeError;
-      }
-    }
-
-    return mapEventRowToEvent({
-      ...data,
-      event_participants: event.attendees.map((attendee) => ({ alumni: attendee })),
-    });
   };
 
   const persistEventAttendees = async (eventId: string, attendees: Contact[]) => {

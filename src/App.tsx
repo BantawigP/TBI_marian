@@ -90,6 +90,7 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
   const programId = row.program_id ?? row.programs?.program_id ?? null;
   const companyId = row.company_id ?? row.companies?.company_id ?? null;
   const occupationId = row.occupation_id ?? row.occupations?.occupation_id ?? null;
+  const locationId = row.location_id ?? row.locations?.location_id ?? null;
 
    return {
      id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
@@ -108,10 +109,12 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
     occupation:
       row.occupation ?? row.occupation_title ?? row.occupations?.occupation_title ?? '',
     company: row.company ?? row.company_name ?? row.companies?.company_name ?? '',
+    address: row.address ?? row.location ?? row.locations?.name ?? '',
     collegeId: collegeId ?? undefined,
     programId: programId ?? undefined,
     companyId: companyId ?? undefined,
     occupationId: occupationId ?? undefined,
+    locationId: locationId ?? undefined,
   };
 };
 
@@ -143,6 +146,64 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
   };
 };
 
+const CONTACT_BASE_SELECT =
+  'alumni_id,f_name,l_name,year_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)';
+const CONTACT_WITH_LOCATION_SELECT = `${CONTACT_BASE_SELECT},location_id`;
+
+let supportsLocationReference = true;
+
+const getContactSelectColumns = () =>
+  supportsLocationReference ? CONTACT_WITH_LOCATION_SELECT : CONTACT_BASE_SELECT;
+
+const isMissingLocationColumnError = (error: any) =>
+  error?.code === '42703' || /location_id/.test(error?.message ?? '');
+
+const hydrateContactsWithLocations = async (contacts: Contact[]): Promise<Contact[]> => {
+  if (!supportsLocationReference) {
+    return contacts;
+  }
+
+  const locationIds = Array.from(
+    new Set(
+      contacts
+        .map((contact) => contact.locationId)
+        .filter((id): id is number => typeof id === 'number')
+    )
+  );
+
+  if (locationIds.length === 0) {
+    return contacts;
+  }
+
+  const { data, error } = await supabase
+    .from('locations')
+    .select('location_id,name')
+    .in('location_id', locationIds);
+
+  if (error) {
+    console.warn('Supabase: failed to load locations', error);
+    return contacts;
+  }
+
+  const locationMap = new Map<number, string>();
+  (data ?? []).forEach((row: Record<string, any>) => {
+    const id = row.location_id ?? row.id;
+    if (typeof id === 'number') {
+      locationMap.set(id, row.name ?? row.location_name ?? '');
+    }
+  });
+
+  if (locationMap.size === 0) {
+    return contacts;
+  }
+
+  return contacts.map((contact) =>
+    contact.locationId && locationMap.has(contact.locationId)
+      ? { ...contact, address: locationMap.get(contact.locationId) ?? contact.address ?? '' }
+      : contact
+  );
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -166,24 +227,27 @@ export default function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
-    const { data, error } = await supabase
-      .from('alumni')
-      .select(
-        'alumni_id,f_name,l_name,year_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)'
-      );
+    let { data, error } = await supabase.from('alumni').select(getContactSelectColumns());
+
+    if (error && isMissingLocationColumnError(error)) {
+      console.warn('Supabase: location_id column missing on alumni; disabling location link.', error);
+      supportsLocationReference = false;
+      ({ data, error } = await supabase.from('alumni').select(getContactSelectColumns()));
+    }
 
     if (error) {
       throw error;
     }
 
-    return (data ?? []).map(mapContactRowToContact);
+    const contacts = (data ?? []).map(mapContactRowToContact);
+    return hydrateContactsWithLocations(contacts);
   };
 
   const fetchEventsFromSupabase = async (): Promise<Event[]> => {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'event_id,title,description,event_date,event_time,location,location_id,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
+        'event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
       );
 
     if (error) {
@@ -193,12 +257,18 @@ export default function App() {
     return (data ?? []).map(mapEventRowToEvent);
   };
 
-  const persistContactToSupabase = async (contact: Contact) => {
-    const [collegeId, programId, companyId, occupationId] = await Promise.all([
+  const persistContactToSupabase = async (
+    contact: Contact,
+    allowRetryOnMissingLocation = true
+  ): Promise<Contact> => {
+    const [collegeId, programId, companyId, occupationId, locationId] = await Promise.all([
       ensureIdByName('colleges', 'college_name', 'college_id', contact.college),
       ensureIdByName('programs', 'program_name', 'program_id', contact.program),
       ensureIdByName('companies', 'company_name', 'company_id', contact.company),
       ensureIdByName('occupations', 'occupation_title', 'occupation_id', contact.occupation),
+      supportsLocationReference
+        ? ensureIdByName('locations', 'name', 'location_id', contact.address)
+        : Promise.resolve(null),
     ]);
 
     const payload: Record<string, any> = {
@@ -213,24 +283,38 @@ export default function App() {
       contact_number: cleanPhone(contact.contactNumber),
     };
 
+    if (supportsLocationReference) {
+      payload.location_id = locationId;
+    }
+
     const alumniId = numberOrNull(contact.id);
     if (alumniId) {
       payload.alumni_id = alumniId;
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('alumni')
       .upsert(payload, { onConflict: 'alumni_id' })
-      .select(
-        'alumni_id,f_name,l_name,year_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)'
-      )
+      .select(getContactSelectColumns())
       .single();
+
+    if (error && isMissingLocationColumnError(error) && allowRetryOnMissingLocation) {
+      console.warn('Supabase: location_id column missing during upsert; retrying without linkage.', error);
+      supportsLocationReference = false;
+      return persistContactToSupabase(contact, false);
+    }
 
     if (error) {
       throw error;
     }
 
-    return mapContactRowToContact(data);
+    if (!data) {
+      throw new Error('Failed to save contact: no data returned');
+    }
+
+    const savedContact = mapContactRowToContact(data);
+    const [hydratedContact] = await hydrateContactsWithLocations([savedContact]);
+    return hydratedContact ?? savedContact;
   };
 
   const persistContactsBatch = async (items: Contact[]) => {
@@ -240,54 +324,6 @@ export default function App() {
       saved.push(savedContact);
     }
     return saved;
-  };
-
-  const persistEventToSupabase = async (event: Event) => {
-    const locationId = await ensureIdByName('locations', 'name', 'location_id', event.location);
-
-    const payload: Record<string, any> = {
-      title: event.title,
-      description: event.description,
-      event_date: event.date,
-      event_time: event.time,
-    };
-
-    if (locationId) {
-      payload.location_id = locationId;
-    } else {
-      payload.location = event.location;
-    }
-
-    const { data, error } = await supabase
-      .from('events')
-      .insert(payload)
-      .select('event_id,title,description,event_date,event_time,location,location_id,locations(location_id,name,city,country)')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    const eventId = data?.event_id ?? null;
-
-    const attendeeRows = (event.attendees ?? [])
-      .map((attendee) => numberOrNull(attendee.id))
-      .filter((id): id is number => Boolean(id))
-      .map((alumniId) => ({ event_id: eventId, alumni_id: alumniId }));
-
-    if (eventId && attendeeRows.length > 0) {
-      const { error: attendeeError } = await supabase
-        .from('event_participants')
-        .upsert(attendeeRows, { onConflict: 'event_id,alumni_id' });
-      if (attendeeError) {
-        throw attendeeError;
-      }
-    }
-
-    return mapEventRowToEvent({
-      ...data,
-      event_participants: event.attendees.map((attendee) => ({ alumni: attendee })),
-    });
   };
 
   const persistEventAttendees = async (eventId: string, attendees: Contact[]) => {

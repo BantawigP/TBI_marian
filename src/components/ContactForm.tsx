@@ -10,7 +10,7 @@ interface ContactFormProps {
   onSave: (contact: Contact) => void | Promise<void>;
 }
 
-type DimensionKey = 'college' | 'program' | 'company' | 'occupation';
+type DimensionKey = 'college' | 'program' | 'company' | 'address' | 'occupation';
 
 interface DimensionOption {
   id: number;
@@ -21,6 +21,7 @@ const dimensionConfig: Record<DimensionKey, { table: string; id: string; name: s
   college: { table: 'colleges', id: 'college_id', name: 'college_name' },
   program: { table: 'programs', id: 'program_id', name: 'program_name' },
   company: { table: 'companies', id: 'company_id', name: 'company_name' },
+  address: { table: 'locations', id: 'location_id', name: 'name' },
   occupation: { table: 'occupations', id: 'occupation_id', name: 'occupation_title' },
 };
 
@@ -37,6 +38,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     dateGraduated: contact?.dateGraduated || '',
     occupation: contact?.occupation || '',
     company: contact?.company || '',
+    address: contact?.address || '',
     status: contact?.status || 'Pending',
   });
   const [autoGenerateId, setAutoGenerateId] = useState(!contact?.id);
@@ -48,13 +50,24 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     college: [],
     program: [],
     company: [],
+    address: [],
     occupation: [],
   });
   const [loadingReference, setLoadingReference] = useState(false);
   const [addingKey, setAddingKey] = useState<DimensionKey | null>(null);
 
   const handleChange = (field: keyof Contact, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next: Contact = { ...prev, [field]: value };
+
+      if (field === 'firstName' || field === 'lastName') {
+        const nextFirst = field === 'firstName' ? value : next.firstName;
+        const nextLast = field === 'lastName' ? value : next.lastName;
+        next.name = `${nextFirst} ${nextLast}`.trim();
+      }
+
+      return next;
+    });
   };
 
   const loadReferenceData = async () => {
@@ -85,6 +98,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
         college: [],
         program: [],
         company: [],
+        address: [],
         occupation: [],
       };
 
@@ -158,13 +172,14 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
   ) => {
     const value = (formData as unknown as Record<string, string | undefined>)[key] ?? '';
     const trimmed = value.trim();
+    const normalizedValue = trimmed.toLowerCase();
     const matches = trimmed
-      ? dimensionOptions[key].filter((opt) =>
-          opt.label.toLowerCase().includes(trimmed.toLowerCase())
-        )
-      : dimensionOptions[key].slice(0, 5);
+      ? dimensionOptions[key]
+          .filter((opt) => opt.label.toLowerCase().startsWith(normalizedValue))
+          .slice(0, 8)
+      : [];
     const canAdd = Boolean(trimmed) &&
-      !dimensionOptions[key].some((opt) => opt.label.toLowerCase() === trimmed.toLowerCase());
+      !dimensionOptions[key].some((opt) => opt.label.toLowerCase() === normalizedValue);
 
     return (
       <div>
@@ -178,14 +193,8 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
               placeholder={placeholder}
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
               required={required}
-              list={`${key}-suggestions`}
             />
-            <datalist id={`${key}-suggestions`}>
-              {dimensionOptions[key].map((opt) => (
-                <option key={opt.id} value={opt.label} />
-              ))}
-            </datalist>
-            {matches.length > 0 && (
+            {Boolean(trimmed) && matches.length > 0 && (
               <div className="mt-1 border border-gray-200 rounded-lg bg-white shadow-sm max-h-40 overflow-y-auto">
                 {matches.map((opt) => (
                   <button
@@ -228,6 +237,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
       id: resolvedId,
       name: `${formData.firstName} ${formData.lastName}`.trim(),
       dateGraduated: formData.dateGraduated || '',
+      address: formData.address?.trim() || '',
     };
 
     const duplicateId = existingContacts.find(
@@ -401,6 +411,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                 {renderSuggestionField('college', 'College', 'Select or add a college', true)}
                 {renderSuggestionField('program', 'Program', 'Select or add a program', true)}
                 {renderSuggestionField('company', 'Company Name', 'Select or add a company')}
+                {renderSuggestionField('address', 'Address / Location', 'Select or add an address')}
                 {renderSuggestionField('occupation', 'Occupation', 'Select or add an occupation')}
 
                 <div>

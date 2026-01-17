@@ -15,10 +15,12 @@ export interface Contact {
   dateGraduated?: string;
   occupation?: string;
   company?: string;
+  address?: string;
   collegeId?: number;
   programId?: number;
   companyId?: number;
   occupationId?: number;
+  locationId?: number;
   alumniId?: number;
 }
 

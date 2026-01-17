@@ -1,19 +1,5 @@
-import { X, Mail, Phone, Building2, GraduationCap, Briefcase, Calendar } from 'lucide-react';
-
-interface Contact {
-  id: string;
-  firstName: string;
-  lastName: string;
-  name: string;
-  college: string;
-  program: string;
-  email: string;
-  status: 'Contacted' | 'Pending';
-  contactNumber?: string;
-  dateGraduated?: string;
-  occupation?: string;
-  company?: string;
-}
+import { X, Mail, Phone, Building2, GraduationCap, Briefcase, Calendar, MapPin } from 'lucide-react';
+import type { Contact } from '../types';
 
 interface ViewContactProps {
   contact: Contact;
@@ -84,6 +70,16 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
                   <div className="flex-1">
                     <p className="text-xs text-gray-500 mb-1">Contact Number</p>
                     <p className="text-sm text-gray-900">{contact.contactNumber}</p>
+                  </div>
+                </div>
+              )}
+
+              {contact.address && (
+                <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
+                  <MapPin className="w-5 h-5 text-[#FF2B5E] mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Address / Location</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{contact.address}</p>
                   </div>
                 </div>
               )}
@@ -167,7 +163,7 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
             onClick={handleEdit}
             className="flex-1 max-w-xs px-6 py-3 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
           >
-            Edit
+            Update
           </button>
         </div>
       </div>

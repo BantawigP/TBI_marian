@@ -56,6 +56,11 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees }: ViewEven
     const newAttendees = contactedPeople.filter((c) =>
       selectedAttendees.includes(c.id)
     );
+    console.log('🎯 ViewEvent - handleAddAttendees called:', {
+      selectedIds: selectedAttendees,
+      newAttendeesCount: newAttendees.length,
+      newAttendees: newAttendees.map(a => ({ id: a.id, name: a.name, alumniId: a.alumniId }))
+    });
     onAddAttendees(event.id, newAttendees);
     setShowAddAttendees(false);
     setSelectedAttendees([]);
@@ -199,7 +204,10 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees }: ViewEven
                       Cancel
                     </button>
                     <button
-                      onClick={handleAddAttendees}
+                      onClick={() => {
+                        console.log('🔘 Add button clicked! Selected:', selectedAttendees.length);
+                        handleAddAttendees();
+                      }}
                       disabled={selectedAttendees.length === 0}
                       className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >

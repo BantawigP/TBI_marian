@@ -74,15 +74,20 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
                 </div>
               )}
 
-              {contact.address && (
-                <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-[#FF2B5E] mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500 mb-1">Address / Location</p>
-                    <p className="text-sm text-gray-900 whitespace-pre-line">{contact.address}</p>
-                  </div>
+              <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
+                <MapPin className="w-5 h-5 text-[#FF2B5E] mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-1">Personal Address</p>
+                  <p className="text-sm text-gray-900 whitespace-pre-line">
+                    {contact.address?.trim() || 'No address on file. Select Update to add one.'}
+                  </p>
+                  {contact.locationId && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Linked location ID: {contact.locationId}
+                    </p>
+                  )}
                 </div>
-              )}
+              </div>
 
               <h4 className="text-[#FF2B5E] text-sm mb-4 uppercase tracking-wide mt-6">
                 Education

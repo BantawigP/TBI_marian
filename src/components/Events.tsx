@@ -1,4 +1,4 @@
-import { Calendar, Users, MapPin, Clock, Plus, Eye, Trash2 } from 'lucide-react';
+import { Calendar, Users, MapPin, Clock, Plus, Eye, Trash2, Edit } from 'lucide-react';
 import type { Event } from '../types';
 
 interface EventsProps {
@@ -6,9 +6,10 @@ interface EventsProps {
   onCreateEvent: () => void;
   onViewEvent: (event: Event) => void;
   onDeleteEvent?: (eventId: string) => void;
+  onEditEvent?: (event: Event) => void;
 }
 
-export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent }: EventsProps) {
+export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEditEvent }: EventsProps) {
 
   const upcomingEvents = events.filter(
     (event) => new Date(event.date) >= new Date()
@@ -110,19 +111,34 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent }: Ev
                         {event.description}
                       </p>
                     </div>
-                    {onDeleteEvent && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          console.log('🔴 Delete button clicked in Events.tsx for event:', event.id, event.title);
-                          onDeleteEvent(event.id);
-                        }}
-                        className="ml-3 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete event"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2 ml-3">
+                      {onEditEvent && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            console.log('✏️ Edit button clicked for event:', event.id, event.title);
+                            onEditEvent(event);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit event"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
+                      {onDeleteEvent && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            console.log('🔴 Delete button clicked in Events.tsx for event:', event.id, event.title);
+                            onDeleteEvent(event.id);
+                          }}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete event"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2 mb-4">
@@ -197,11 +213,13 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent }: Ev
               {pastEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => onViewEvent(event)}
+                  className="p-4 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => onViewEvent(event)}
+                    >
                       <h4 className="font-medium text-gray-900 mb-1">
                         {event.title}
                       </h4>
@@ -213,9 +231,25 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent }: Ev
                         </span>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                      Completed
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {onEditEvent && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('✏️ Edit button clicked for past event:', event.id, event.title);
+                            onEditEvent(event);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit event"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
+                      <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                        Completed
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}

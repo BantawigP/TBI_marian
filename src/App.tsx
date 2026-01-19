@@ -5,6 +5,7 @@ import { Home } from './components/Home';
 import { Events } from './components/Events';
 import { Archives } from './components/Archives';
 import { CreateEvent } from './components/CreateEvent';
+import { EditEvent } from './components/EditEvent';
 import { ViewEvent } from './components/ViewEvent';
 import { ContactsTable } from './components/ContactsTable';
 import { ContactForm } from './components/ContactForm';
@@ -15,6 +16,7 @@ import { SearchBar } from './components/SearchBar';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event } from './types';
 import { supabase } from './lib/supabaseClient';
+import { updateEvent } from './lib/eventService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -227,6 +229,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
@@ -654,6 +657,43 @@ export default function App() {
     }
   };
 
+  const handleEditEvent = (event: Event) => {
+    setEditingEvent(event);
+  };
+
+  const handleUpdateEvent = async (
+    eventId: string,
+    eventData: Omit<Event, 'id' | 'attendees'>,
+    attendees: Contact[]
+  ) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      console.log('App - handleUpdateEvent called:', {
+        eventId,
+        title: eventData.title,
+        attendeeCount: attendees.length,
+      });
+
+      // Update event in database
+      const updatedEvent = await updateEvent(eventId, eventData, attendees);
+
+      // Update local state
+      setEvents((prev) =>
+        prev.map((e) => (e.id === eventId ? updatedEvent : e))
+      );
+
+      setEditingEvent(null);
+      console.log('✅ Event updated successfully');
+    } catch (err) {
+      console.error('❌ Failed to update event', err);
+      setSyncError('Failed to update event.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleViewEvent = (event: Event) => {
     setViewingEvent(event);
   };
@@ -767,6 +807,7 @@ export default function App() {
               onCreateEvent={() => setShowCreateEvent(true)}
               onViewEvent={handleViewEvent}
               onDeleteEvent={handleDeleteEvent}
+              onEditEvent={handleEditEvent}
             />
           ) : activeTab === 'archives' ? (
             <Archives
@@ -883,6 +924,16 @@ export default function App() {
           contacts={contacts}
           onClose={() => setShowCreateEvent(false)}
           onSave={handleCreateEvent}
+        />
+      )}
+
+      {/* Edit Event Modal */}
+      {editingEvent && (
+        <EditEvent
+          event={editingEvent}
+          contacts={contacts}
+          onClose={() => setEditingEvent(null)}
+          onSave={handleUpdateEvent}
         />
       )}
 

@@ -117,3 +117,93 @@ export async function createEvent(
     throw error
   }
 }
+
+/**
+ * Updates an existing event in the database
+ * @param eventId - The ID of the event to update
+ * @param eventData - Updated event details
+ * @param attendees - Updated array of Contact objects attending the event
+ * @returns The updated event
+ */
+export async function updateEvent(
+  eventId: string,
+  eventData: Omit<Event, 'id' | 'attendees'>,
+  attendees: Contact[]
+): Promise<Event> {
+  try {
+    // Get or create location ID
+    const locationId = await ensureIdByName('locations', 'name', 'location_id', eventData.location);
+
+    // Update event in the events table
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .update({
+        title: eventData.title,
+        description: eventData.description,
+        event_date: eventData.date,
+        event_time: eventData.time,
+        location_id: locationId,
+      })
+      .eq('event_id', parseInt(eventId))
+      .select('event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country)')
+      .single()
+
+    if (eventError) throw eventError
+
+    // Delete existing attendees
+    const { error: deleteError } = await supabase
+      .from('event_participants')
+      .delete()
+      .eq('event_id', parseInt(eventId))
+
+    if (deleteError) throw deleteError
+
+    // Add new attendees
+    if (attendees.length > 0) {
+      const attendeeRows = attendees
+        .filter((attendee) => attendee.alumniId != null)
+        .map((attendee) => ({ event_id: parseInt(eventId), alumni_id: attendee.alumniId }));
+
+      if (attendeeRows.length > 0) {
+        const { error: attendeeError } = await supabase
+          .from('event_participants')
+          .insert(attendeeRows)
+
+        if (attendeeError) throw attendeeError
+      }
+    }
+
+    // Return the updated event with attendees
+    let locationName = eventData.location;
+    
+    if (event.locations) {
+      if (Array.isArray(event.locations) && event.locations.length > 0) {
+        locationName = (event.locations[0] as any)?.name ?? eventData.location;
+      } else if (!Array.isArray(event.locations) && typeof event.locations === 'object') {
+        locationName = (event.locations as any)?.name ?? eventData.location;
+      }
+    }
+
+    const updatedEvent: Event = {
+      id: event.event_id.toString(),
+      title: event.title,
+      description: event.description,
+      date: event.event_date,
+      time: event.event_time,
+      location: locationName,
+      locationId: event.location_id,
+      attendees,
+    }
+
+    console.log('Updated event with attendees:', {
+      eventId: eventId,
+      attendeeCount: attendees.length,
+      attendees: attendees.map(a => ({ id: a.id, name: a.name, alumniId: a.alumniId }))
+    });
+
+    return updatedEvent
+  } catch (error) {
+    console.error('Error updating event:', error)
+    throw error
+  }
+}

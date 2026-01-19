@@ -177,7 +177,7 @@ const hydrateContactsWithLocations = async (contacts: Contact[]): Promise<Contac
 
   const { data, error } = await supabase
     .from('locations')
-    .select('location_id,name')
+    .select('location_id,name,city,country')
     .in('location_id', locationIds);
 
   if (error) {
@@ -189,7 +189,10 @@ const hydrateContactsWithLocations = async (contacts: Contact[]): Promise<Contac
   (data ?? []).forEach((row: Record<string, any>) => {
     const id = row.location_id ?? row.id;
     if (typeof id === 'number') {
-      locationMap.set(id, row.name ?? row.location_name ?? '');
+      const derivedCityCountry = [row.city, row.country].filter(Boolean).join(', ');
+      const segments = [row.name, derivedCityCountry].filter(Boolean);
+      const label = segments.join(' • ');
+      locationMap.set(id, label || row.name || derivedCityCountry || '');
     }
   });
 
@@ -890,6 +893,7 @@ export default function App() {
           contacts={contacts}
           onClose={() => setViewingEvent(null)}
           onAddAttendees={handleAddAttendees}
+          onArchiveEvent={handleDeleteEvent}
         />
       )}
 

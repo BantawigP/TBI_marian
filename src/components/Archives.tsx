@@ -8,7 +8,7 @@ interface ArchivesProps {
   onRestoreContact: (contact: Contact) => void;
   onRestoreEvent: (event: Event) => void;
   onPermanentDeleteContact: (contactId: string) => void;
-  onPermanentDeleteEvent: (eventId: string) => void;
+  onPermanentDeleteEvent: (eventId: string) => void | Promise<void>;
 }
 
 export function Archives({

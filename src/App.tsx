@@ -16,7 +16,7 @@ import { SearchBar } from './components/SearchBar';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event } from './types';
 import { supabase } from './lib/supabaseClient';
-import { updateEvent } from './lib/eventService';
+import { updateEvent, deleteEventPermanently } from './lib/eventService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -741,8 +741,19 @@ export default function App() {
     setArchivedContacts(archivedContacts.filter((c) => c.id !== contactId));
   };
 
-  const handlePermanentDeleteEvent = (eventId: string) => {
-    setArchivedEvents(archivedEvents.filter((e) => e.id !== eventId));
+  const handlePermanentDeleteEvent = async (eventId: string) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      await deleteEventPermanently(eventId);
+      setArchivedEvents((prev) => prev.filter((e) => e.id !== eventId));
+    } catch (error) {
+      console.error('❌ Failed to permanently delete event', error);
+      setSyncError('Failed to permanently delete event from Supabase.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const filteredContacts = contacts.filter((contact) => {

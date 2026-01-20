@@ -1,6 +1,11 @@
 import { supabase } from './supabaseClient'
 import type { Event, Contact } from '../types'
 
+const numberOrNull = (value: string | number | undefined | null) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 
 const ensureIdByName = async (
   table: string,
@@ -205,5 +210,35 @@ export async function updateEvent(
   } catch (error) {
     console.error('Error updating event:', error)
     throw error
+  }
+}
+
+/**
+ * Permanently deletes an event and any linked event_participants rows.
+ * Call this when removing an archived event.
+ */
+export async function deleteEventPermanently(eventId: string): Promise<void> {
+  const numericEventId = numberOrNull(eventId)
+
+  if (!numericEventId) {
+    throw new Error('Invalid event ID; cannot delete')
+  }
+
+  const { error: participantsError } = await supabase
+    .from('event_participants')
+    .delete()
+    .eq('event_id', numericEventId)
+
+  if (participantsError) {
+    throw participantsError
+  }
+
+  const { error: eventError } = await supabase
+    .from('events')
+    .delete()
+    .eq('event_id', numericEventId)
+
+  if (eventError) {
+    throw eventError
   }
 }

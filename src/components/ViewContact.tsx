@@ -83,7 +83,6 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
                   </p>
                   {contact.locationId && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Linked location ID: {contact.locationId}
                     </p>
                   )}
                 </div>

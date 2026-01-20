@@ -35,12 +35,6 @@ const cleanPhone = (value?: string | null) => {
 
 const isRlsViolation = (error: any) => error?.code === '42501';
 
-const parseYearFromDate = (value?: string | null) => {
-  if (!value) return null;
-  const year = new Date(value).getFullYear();
-  return Number.isFinite(year) ? year : null;
-};
-
 const ensureIdByName = async (
   table: string,
   nameColumn: string,
@@ -88,15 +82,24 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
   const firstName = row.f_name ?? row.F_name ?? row.first_name ?? row.firstName ?? '';
   const lastName = row.l_name ?? row.L_name ?? row.last_name ?? row.lastName ?? '';
 
-  const collegeId = row.college_id ?? row.colleges?.college_id ?? null;
-  const programId = row.program_id ?? row.programs?.program_id ?? null;
-  const companyId = row.company_id ?? row.companies?.company_id ?? null;
-  const occupationId = row.occupation_id ?? row.occupations?.occupation_id ?? null;
-  const locationId = row.location_id ?? row.locations?.location_id ?? null;
+  const collegeId = numberOrNull(row.college_id ?? row.colleges?.college_id ?? null);
+  const programId = numberOrNull(row.program_id ?? row.programs?.program_id ?? null);
+  const companyId = numberOrNull(row.company_id ?? row.companies?.company_id ?? null);
+  const occupationId = numberOrNull(row.occupation_id ?? row.occupations?.occupation_id ?? null);
+  const alumniAddressId = numberOrNull(
+    row.alumniaddress_id ?? row.alumni_addresses?.alumniaddress_id ?? null
+  );
+  const locationId = numberOrNull(
+    row.location_id ??
+      row.locations?.location_id ??
+      row.alumni_addresses?.location_id ??
+      row.alumni_addresses?.locations?.location_id ??
+      null
+  );
 
-   return {
-     id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
-     alumniId: numberOrNull(row.alumni_id) || undefined,
+  return {
+    id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
+    alumniId: numberOrNull(row.alumni_id) || undefined,
     firstName,
     lastName,
     name: row.full_name ?? row.name ?? `${firstName} ${lastName}`.trim(),
@@ -107,16 +110,22 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
     contactNumber: row.contact_number
       ? row.contact_number.toString()
       : row.contactNumber ?? '',
-    dateGraduated: row.date_graduated ?? '',
+    dateGraduated: row.date_graduated ?? row.year_graduated ?? '',
     occupation:
       row.occupation ?? row.occupation_title ?? row.occupations?.occupation_title ?? '',
     company: row.company ?? row.company_name ?? row.companies?.company_name ?? '',
-    address: row.address ?? row.location ?? row.locations?.name ?? '',
+    address:
+      row.address ??
+      row.location ??
+      row.locations?.name ??
+      row.alumni_addresses?.locations?.name ??
+      '',
     collegeId: collegeId ?? undefined,
     programId: programId ?? undefined,
     companyId: companyId ?? undefined,
     occupationId: occupationId ?? undefined,
     locationId: locationId ?? undefined,
+    alumniAddressId: alumniAddressId ?? undefined,
   };
 };
 
@@ -148,23 +157,23 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
   };
 };
 
-const CONTACT_BASE_SELECT =
-  'alumni_id,f_name,l_name,year_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)';
-const CONTACT_WITH_LOCATION_SELECT = `${CONTACT_BASE_SELECT},location_id`;
+const CONTACT_SELECT_BASE =
+  'alumni_id,f_name,l_name,date_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)';
+const CONTACT_SELECT_WITH_ADDRESS = `${CONTACT_SELECT_BASE},alumniaddress_id`;
 
-let supportsLocationReference = true;
+let supportsAlumniAddressColumn = true;
+let loggedMissingAlumniAddressColumn = false;
 
-const getContactSelectColumns = () =>
-  supportsLocationReference ? CONTACT_WITH_LOCATION_SELECT : CONTACT_BASE_SELECT;
+const noteMissingAlumniAddressColumn = () => {
+  if (loggedMissingAlumniAddressColumn) return;
+  loggedMissingAlumniAddressColumn = true;
+  console.warn('Supabase: alumniaddress_id column missing, continuing without address linkage.');
+};
 
-const isMissingLocationColumnError = (error: any) =>
-  error?.code === '42703' || /location_id/.test(error?.message ?? '');
+const getContactSelect = () =>
+  supportsAlumniAddressColumn ? CONTACT_SELECT_WITH_ADDRESS : CONTACT_SELECT_BASE;
 
 const hydrateContactsWithLocations = async (contacts: Contact[]): Promise<Contact[]> => {
-  if (!supportsLocationReference) {
-    return contacts;
-  }
-
   const locationIds = Array.from(
     new Set(
       contacts
@@ -209,6 +218,102 @@ const hydrateContactsWithLocations = async (contacts: Contact[]): Promise<Contac
   );
 };
 
+const hydrateContactsWithAddresses = async (contacts: Contact[]): Promise<Contact[]> => {
+  const addressIds = Array.from(
+    new Set(
+      contacts
+        .map((contact) => contact.alumniAddressId)
+        .filter((id): id is number => typeof id === 'number')
+    )
+  );
+
+  if (addressIds.length === 0) {
+    return hydrateContactsWithLocations(contacts);
+  }
+
+  const { data, error } = await supabase
+    .from('alumni_addresses')
+    .select('alumniaddress_id,location_id')
+    .in('alumniaddress_id', addressIds);
+
+  if (error) {
+    console.warn('Supabase: failed to load alumni addresses', error);
+    return hydrateContactsWithLocations(contacts);
+  }
+
+  const addressToLocation = new Map<number, number>();
+  (data ?? []).forEach((row: Record<string, any>) => {
+    const addrId = numberOrNull(row.alumniaddress_id);
+    const locId = numberOrNull(row.location_id);
+    if (addrId && locId) {
+      addressToLocation.set(addrId, locId);
+    }
+  });
+
+  const contactsWithLocationIds = contacts.map((contact) => {
+    if (!contact.alumniAddressId) {
+      return contact;
+    }
+
+    const linkedLocationId = addressToLocation.get(contact.alumniAddressId);
+    if (linkedLocationId && linkedLocationId !== contact.locationId) {
+      return { ...contact, locationId: linkedLocationId };
+    }
+
+    return contact;
+  });
+
+  return hydrateContactsWithLocations(contactsWithLocationIds);
+};
+
+const saveAlumniAddressLink = async (
+  alumniId: number | null,
+  locationId: number | null,
+  existingAddressId?: number
+): Promise<number | null> => {
+  if (!alumniId || !locationId) {
+    return existingAddressId ?? null;
+  }
+
+  const addressPayload: Record<string, any> = {
+    alumni_id: alumniId,
+    location_id: locationId,
+  };
+
+  if (existingAddressId) {
+    addressPayload.alumniaddress_id = existingAddressId;
+  }
+
+  const query = existingAddressId
+    ? supabase
+        .from('alumni_addresses')
+        .update(addressPayload)
+        .eq('alumniaddress_id', existingAddressId)
+    : supabase.from('alumni_addresses').insert(addressPayload);
+
+  const { data, error } = await query.select('alumniaddress_id').single();
+
+  if (error) {
+    console.error('Supabase: failed to save alumni address link', error);
+    throw error;
+  }
+
+  const newAddressId = numberOrNull((data as Record<string, any>)?.alumniaddress_id);
+
+  if (!existingAddressId && newAddressId) {
+    const { error: linkError } = await supabase
+      .from('alumni')
+      .update({ alumniaddress_id: newAddressId })
+      .eq('alumni_id', alumniId);
+
+    if (linkError) {
+      console.warn('Supabase: failed to assign alumniaddress_id to alumni', linkError);
+    }
+  }
+
+  return newAddressId ?? existingAddressId ?? null;
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -233,12 +338,12 @@ export default function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
-    let { data, error } = await supabase.from('alumni').select(getContactSelectColumns());
+    let { data, error } = await supabase.from('alumni').select(getContactSelect());
 
-    if (error && isMissingLocationColumnError(error)) {
-      console.warn('Supabase: location_id column missing on alumni; disabling location link.', error);
-      supportsLocationReference = false;
-      ({ data, error } = await supabase.from('alumni').select(getContactSelectColumns()));
+    if (error && error.code === '42703') {
+      noteMissingAlumniAddressColumn();
+      supportsAlumniAddressColumn = false;
+      ({ data, error } = await supabase.from('alumni').select(getContactSelect()));
     }
 
     if (error) {
@@ -246,16 +351,24 @@ export default function App() {
     }
 
     const contacts = (data ?? []).map(mapContactRowToContact);
-    return hydrateContactsWithLocations(contacts);
+    return hydrateContactsWithAddresses(contacts);
   };
 
+  const eventAlumniFields = () =>
+    supportsAlumniAddressColumn
+      ? 'alumni_id,alumniaddress_id,f_name,l_name,email,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)'
+      : 'alumni_id,f_name,l_name,email,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)';
+
   const fetchEventsFromSupabase = async (): Promise<Event[]> => {
-    const { data, error } = await supabase
-      .from('events')
-      .select(
-        'event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
-      )
-      .or('is_active.eq.true,is_active.is.null'); // Only fetch active events
+    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+    let { data, error } = await supabase.from('events').select(selectClause).or('is_active.eq.true,is_active.is.null');
+
+    if (error && error.code === '42703') {
+      noteMissingAlumniAddressColumn();
+      supportsAlumniAddressColumn = false;
+      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+      ({ data, error } = await supabase.from('events').select(fallbackSelect).or('is_active.eq.true,is_active.is.null'));
+    }
 
     if (error) {
       throw error;
@@ -265,12 +378,15 @@ export default function App() {
   };
 
   const fetchArchivedEventsFromSupabase = async (): Promise<Event[]> => {
-    const { data, error } = await supabase
-      .from('events')
-      .select(
-        'event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(alumni_id,f_name,l_name,email,year_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)))'
-      )
-      .eq('is_active', false); // Only fetch inactive (archived) events
+    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+    let { data, error } = await supabase.from('events').select(selectClause).eq('is_active', false);
+
+    if (error && error.code === '42703') {
+      noteMissingAlumniAddressColumn();
+      supportsAlumniAddressColumn = false;
+      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+      ({ data, error } = await supabase.from('events').select(fallbackSelect).eq('is_active', false));
+    }
 
     if (error) {
       throw error;
@@ -279,24 +395,19 @@ export default function App() {
     return (data ?? []).map(mapEventRowToEvent);
   };
 
-  const persistContactToSupabase = async (
-    contact: Contact,
-    allowRetryOnMissingLocation = true
-  ): Promise<Contact> => {
+  const persistContactToSupabase = async (contact: Contact): Promise<Contact> => {
     const [collegeId, programId, companyId, occupationId, locationId] = await Promise.all([
       ensureIdByName('colleges', 'college_name', 'college_id', contact.college),
       ensureIdByName('programs', 'program_name', 'program_id', contact.program),
       ensureIdByName('companies', 'company_name', 'company_id', contact.company),
       ensureIdByName('occupations', 'occupation_title', 'occupation_id', contact.occupation),
-      supportsLocationReference
-        ? ensureIdByName('locations', 'name', 'location_id', contact.address)
-        : Promise.resolve(null),
+      ensureIdByName('locations', 'name', 'location_id', contact.address),
     ]);
 
     const payload: Record<string, any> = {
       f_name: contact.firstName,
       l_name: contact.lastName,
-      year_graduated: parseYearFromDate(contact.dateGraduated),
+      date_graduated: contact.dateGraduated || null,
       email: contact.email,
       college_id: collegeId,
       program_id: programId,
@@ -305,25 +416,37 @@ export default function App() {
       contact_number: cleanPhone(contact.contactNumber),
     };
 
-    if (supportsLocationReference) {
-      payload.location_id = locationId;
-    }
-
-    const alumniId = numberOrNull(contact.id);
+    const alumniId = numberOrNull(contact.alumniId ?? contact.id);
     if (alumniId) {
       payload.alumni_id = alumniId;
     }
 
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('alumni')
       .upsert(payload, { onConflict: 'alumni_id' })
-      .select(getContactSelectColumns())
+      .select(getContactSelect())
       .single();
 
-    if (error && isMissingLocationColumnError(error) && allowRetryOnMissingLocation) {
-      console.warn('Supabase: location_id column missing during upsert; retrying without linkage.', error);
-      supportsLocationReference = false;
-      return persistContactToSupabase(contact, false);
+    if (error && error.code === '42703') {
+      noteMissingAlumniAddressColumn();
+      supportsAlumniAddressColumn = false;
+      const retry = await supabase
+        .from('alumni')
+        .upsert(payload, { onConflict: 'alumni_id' })
+        .select(getContactSelect())
+        .single();
+
+      if (retry.error) {
+        throw retry.error;
+      }
+
+      if (!retry.data) {
+        throw new Error('Failed to save contact: no data returned');
+      }
+
+      const savedContactNoAddress = mapContactRowToContact(retry.data as Record<string, any>);
+      const [hydratedNoAddress] = await hydrateContactsWithAddresses([savedContactNoAddress]);
+      return hydratedNoAddress ?? savedContactNoAddress;
     }
 
     if (error) {
@@ -334,8 +457,25 @@ export default function App() {
       throw new Error('Failed to save contact: no data returned');
     }
 
-    const savedContact = mapContactRowToContact(data);
-    const [hydratedContact] = await hydrateContactsWithLocations([savedContact]);
+    const savedRow = data as Record<string, any>;
+    const persistedAlumniId = numberOrNull(savedRow.alumni_id) ?? alumniId ?? null;
+
+    if (supportsAlumniAddressColumn && persistedAlumniId && locationId) {
+      const existingAddressId =
+        numberOrNull(savedRow.alumniaddress_id) ?? contact.alumniAddressId ?? null;
+      const linkedAddressId = await saveAlumniAddressLink(
+        persistedAlumniId,
+        locationId,
+        existingAddressId ?? undefined
+      );
+
+      if (linkedAddressId && linkedAddressId !== savedRow.alumniaddress_id) {
+        savedRow.alumniaddress_id = linkedAddressId;
+      }
+    }
+
+    const savedContact = mapContactRowToContact(savedRow);
+    const [hydratedContact] = await hydrateContactsWithAddresses([savedContact]);
     return hydratedContact ?? savedContact;
   };
 

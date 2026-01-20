@@ -22,6 +22,7 @@ export interface Contact {
   occupationId?: number;
   locationId?: number;
   alumniId?: number;
+  alumniAddressId?: number;
 }
 
 // Frontend event model mapped from the Supabase events schema.

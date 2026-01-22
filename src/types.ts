@@ -36,3 +36,20 @@ export interface Event {
   locationId?: number;
   attendees: Contact[];
 }
+
+// Team member roles
+export type TeamRole = 'Admin' | 'Manager' | 'Member';
+
+// Team member model
+export interface TeamMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  email: string;
+  role: TeamRole;
+  department?: string;
+  avatarColor?: string;
+  phone?: string;
+  joinedDate?: string;
+}

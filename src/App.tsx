@@ -79,6 +79,35 @@ const ensureIdByName = async (
   return (data as Record<string, any> | null)?.[idColumn] ?? null;
 };
 
+const ensureEmailId = async (email?: string): Promise<number | null> => {
+  if (!email || !email.trim()) return null;
+
+  const trimmed = email.trim().toLowerCase();
+  
+  // Check if email already exists
+  const { data: existing } = await supabase
+    .from('email_address')
+    .select('email_id')
+    .eq('email', trimmed)
+    .maybeSingle();
+
+  if (existing?.email_id) return existing.email_id;
+
+  // Insert new email
+  const { data: inserted, error } = await supabase
+    .from('email_address')
+    .insert({ email: trimmed })
+    .select('email_id')
+    .single();
+
+  if (error) {
+    console.error('Failed to insert email:', error);
+    return null;
+  }
+  
+  return inserted?.email_id ?? null;
+};
+
 const mapContactRowToContact = (row: Record<string, any>): Contact => {
   const firstName = row.f_name ?? row.F_name ?? row.first_name ?? row.firstName ?? '';
   const lastName = row.l_name ?? row.L_name ?? row.last_name ?? row.lastName ?? '';
@@ -106,7 +135,7 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
     name: row.full_name ?? row.name ?? `${firstName} ${lastName}`.trim(),
     college: row.college ?? row.college_name ?? row.colleges?.college_name ?? '',
     program: row.program ?? row.program_name ?? row.programs?.program_name ?? '',
-    email: row.email ?? '',
+    email: row.email_address?.email ?? '',
     status: (row.status ?? defaultStatus) as ContactStatus,
     contactNumber: row.contact_number
       ? row.contact_number.toString()
@@ -159,7 +188,7 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
 };
 
 const CONTACT_SELECT_BASE =
-  'alumni_id,f_name,l_name,date_graduated,email,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)';
+  'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email)';
 const CONTACT_SELECT_WITH_ADDRESS = `${CONTACT_SELECT_BASE},alumniaddress_id`;
 
 let supportsAlumniAddressColumn = true;
@@ -357,8 +386,8 @@ export default function App() {
 
   const eventAlumniFields = () =>
     supportsAlumniAddressColumn
-      ? 'alumni_id,alumniaddress_id,f_name,l_name,email,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)'
-      : 'alumni_id,f_name,l_name,email,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title)';
+      ? 'alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email)'
+      : 'alumni_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email)';
 
   const fetchEventsFromSupabase = async (): Promise<Event[]> => {
     const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
@@ -397,19 +426,20 @@ export default function App() {
   };
 
   const persistContactToSupabase = async (contact: Contact): Promise<Contact> => {
-    const [collegeId, programId, companyId, occupationId, locationId] = await Promise.all([
+    const [collegeId, programId, companyId, occupationId, locationId, emailId] = await Promise.all([
       ensureIdByName('colleges', 'college_name', 'college_id', contact.college),
       ensureIdByName('programs', 'program_name', 'program_id', contact.program),
       ensureIdByName('companies', 'company_name', 'company_id', contact.company),
       ensureIdByName('occupations', 'occupation_title', 'occupation_id', contact.occupation),
       ensureIdByName('locations', 'name', 'location_id', contact.address),
+      ensureEmailId(contact.email),
     ]);
 
     const payload: Record<string, any> = {
       f_name: contact.firstName,
       l_name: contact.lastName,
       date_graduated: contact.dateGraduated || null,
-      email: contact.email,
+      email_id: emailId,
       college_id: collegeId,
       program_id: programId,
       company_id: companyId,
@@ -596,9 +626,18 @@ export default function App() {
           message: error instanceof Error ? error.message : 'Unknown error',
           code: (error as any)?.code,
           details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          fullError: error,
         });
+        
+        // Show more specific error message
+        const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+        const specificError = `Unable to load data from Supabase: ${errorMsg}`;
+        
+        console.error('📋 Full error object:', error);
+        
         if (isMounted) {
-          setSyncError('Unable to load some data from Supabase. Showing local data.');
+          setSyncError(specificError);
         }
       } finally {
         if (isMounted) {

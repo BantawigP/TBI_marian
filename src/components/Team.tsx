@@ -1,35 +1,102 @@
-import { useState } from 'react';
-import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X } from 'lucide-react';
+import type { TeamMember, TeamRole } from '../types';
+import { fetchTeamMembers, createTeamMember, deleteTeamMember } from '../lib/teamService';
 
-export interface TeamMember {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
-  role: 'Admin' | 'Manager' | 'Member';
-  department: string;
-  joinDate: string;
-  avatar?: string;
-}
-
-interface TeamProps {
-  teamMembers: TeamMember[];
-  onAddMember: () => void;
-  onEditMember: (member: TeamMember) => void;
-  onDeleteMember: (memberId: string) => void;
-}
-
-export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }: TeamProps) {
+export function Team() {
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newMember, setNewMember] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'Member' as TeamRole,
+    department: '',
+    joinedDate: '',
+  });
+
+  // Load team members on mount
+  useEffect(() => {
+    loadTeamMembers();
+  }, []);
+
+  const loadTeamMembers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchTeamMembers();
+      setTeamMembers(data);
+    } catch (err) {
+      console.error('Error loading team members:', err);
+      setError('Failed to load team members');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!newMember.firstName || !newMember.lastName || !newMember.email) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      await createTeamMember({
+        firstName: newMember.firstName,
+        lastName: newMember.lastName,
+        name: `${newMember.firstName} ${newMember.lastName}`,
+        email: newMember.email,
+        phone: newMember.phone || undefined,
+        role: newMember.role,
+        department: newMember.department || undefined,
+        joinedDate: newMember.joinedDate || new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
+        avatarColor: '#FF2B5E',
+      });
+      await loadTeamMembers();
+      setShowAddModal(false);
+      setNewMember({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        role: 'Member',
+        department: '',
+        joinedDate: '',
+      });
+    } catch (err) {
+      console.error('Error creating team member:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create team member';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMember = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from the team?`)) return;
+
+    try {
+      setLoading(true);
+      await deleteTeamMember(id);
+      await loadTeamMembers();
+    } catch (err) {
+      console.error('Error deleting team member:', err);
+      setError('Failed to delete team member');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter team members
   const filteredMembers = teamMembers.filter((member) => {
     const matchesSearch =
       `${member.firstName} ${member.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.department.toLowerCase().includes(searchQuery.toLowerCase());
+      (member.department || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = selectedRole === 'all' || member.role === selectedRole;
     return matchesSearch && matchesRole;
   });
@@ -42,7 +109,8 @@ export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }:
 
   // Group by department
   const departmentStats = teamMembers.reduce((acc, member) => {
-    acc[member.department] = (acc[member.department] || 0) + 1;
+    const dept = member.department || 'Unassigned';
+    acc[dept] = (acc[dept] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -70,6 +138,19 @@ export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }:
 
   return (
     <div className="space-y-8">
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          {error}
+          <button
+            onClick={() => setError(null)}
+            className="ml-2 underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -77,8 +158,9 @@ export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }:
           <p className="text-gray-600">Manage your team members and their roles</p>
         </div>
         <button
-          onClick={onAddMember}
-          className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
+          onClick={() => setShowAddModal(true)}
+          disabled={loading}
+          className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
           Add Member
@@ -173,7 +255,7 @@ export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }:
           </p>
           {!searchQuery && selectedRole === 'all' && (
             <button
-              onClick={onAddMember}
+              onClick={() => setShowAddModal(true)}
               className="inline-flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -231,30 +313,24 @@ export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }:
                   )}
                   <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="w-4 h-4 text-gray-400" />
-                    <span>Joined {new Date(member.joinDate).toLocaleDateString()}</span>
+                    <span>Joined {member.joinedDate || 'N/A'}</span>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
                   <button
-                    onClick={() => onEditMember(member)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    onClick={() => {}}
+                    disabled={loading}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
                   >
                     <Edit2 className="w-4 h-4" />
                     Edit
                   </button>
                   <button
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `Are you sure you want to remove ${member.firstName} ${member.lastName} from the team?`
-                        )
-                      ) {
-                        onDeleteMember(member.id);
-                      }
-                    }}
-                    className="flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                    onClick={() => handleDeleteMember(member.id, member.name)}
+                    disabled={loading}
+                    className="flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -289,6 +365,121 @@ export function Team({ teamMembers, onAddMember, onEditMember, onDeleteMember }:
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add Member Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Add Team Member</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  value={newMember.firstName}
+                  onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter first name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  value={newMember.lastName}
+                  onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter last name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={newMember.email}
+                  onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="member@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  value={newMember.phone}
+                  onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="+63 XXX XXX XXXX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  value={newMember.department}
+                  onChange={(e) => setNewMember({ ...newMember, department: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter department"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Role *
+                </label>
+                <select
+                  value={newMember.role}
+                  onChange={(e) => setNewMember({ ...newMember, role: e.target.value as TeamRole })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddMember}
+                disabled={!newMember.firstName || !newMember.lastName || !newMember.email || loading}
+                className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6265A] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Add Member
+              </button>
+            </div>
           </div>
         </div>
       )}

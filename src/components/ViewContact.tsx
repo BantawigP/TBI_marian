@@ -5,11 +5,25 @@ interface ViewContactProps {
   contact: Contact;
   onClose: () => void;
   onEdit: (contact: Contact) => void;
+  // Optional callback to update contact status (e.g. after email verification)
+  onUpdateStatus?: (contact: Contact) => void;
 }
 
-export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
+export function ViewContact({ contact, onClose, onEdit, onUpdateStatus }: ViewContactProps) {
   const handleEdit = () => {
     onEdit(contact);
+  };
+
+  const handleSendVerification = () => {
+    // For now, simulate a successful verification by marking as "Verified"
+    const updatedContact: Contact = {
+      ...contact,
+      status: 'Verified',
+    };
+
+    if (onUpdateStatus) {
+      onUpdateStatus(updatedContact);
+    }
   };
 
   return (
@@ -39,15 +53,26 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
               <h3 className="text-2xl font-semibold text-gray-900 mb-2">
                 {contact.firstName} {contact.lastName}
               </h3>
-              <span
-                className={`inline-flex px-4 py-1.5 rounded-full text-sm font-medium ${
-                  contact.status === 'Contacted'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-yellow-100 text-yellow-700'
-                }`}
-              >
-                {contact.status}
-              </span>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`inline-flex px-4 py-1.5 rounded-full text-sm font-medium ${
+                    contact.status === 'Verified'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}
+                >
+                  {contact.status}
+                </span>
+                {contact.status === 'Unverified' && (
+                  <button
+                    type="button"
+                    onClick={handleSendVerification}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-[#FF2B5E] text-[#FF2B5E] hover:bg-[#FF2B5E] hover:text-white transition-colors"
+                  >
+                    Send Verification
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Contact Information */}

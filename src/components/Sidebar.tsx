@@ -1,4 +1,4 @@
-import { Home, Users, Calendar, Archive, FileText, LogOut } from 'lucide-react';
+import { Home, Users, Calendar, Archive, FileText, LogOut, UserCog } from 'lucide-react';
 import logo from '../assets/marian tbi.jpg';
 
 interface SidebarProps {
@@ -11,6 +11,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
   const navItems = [
     { icon: Home, label: 'Home', value: 'home' },
     { icon: Users, label: 'Contacts', value: 'contacts' },
+    { icon: UserCog, label: 'Team', value: 'team' },
     { icon: Calendar, label: 'Events', value: 'events' },
     { icon: Archive, label: 'Archives', value: 'archives' },
     { icon: FileText, label: 'Requests', value: 'requests' },

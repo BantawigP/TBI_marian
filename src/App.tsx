@@ -13,8 +13,7 @@ import { ViewContact } from './components/ViewContact';
 import { ImportContact } from './components/ImportContact';
 import { ExportContact } from './components/ExportContact';
 import { SearchBar } from './components/SearchBar';
-import { Team, type TeamMember } from './components/Team';
-import { TeamForm } from './components/teamform';
+import { Team } from './components/Team';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event } from './types';
 import { supabase } from './lib/supabaseClient';
@@ -23,49 +22,6 @@ import { updateEvent, deleteEventPermanently } from './lib/eventService';
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
 const defaultStatus: ContactStatus = 'Contacted';
-
-const initialTeamMembers: TeamMember[] = [
-  {
-    id: 'team-1',
-    firstName: 'Alicia',
-    lastName: 'Garcia',
-    email: 'alicia.garcia@example.com',
-    phone: '+63 917 111 2222',
-    role: 'Admin',
-    department: 'Operations',
-    joinDate: '2023-02-12',
-  },
-  {
-    id: 'team-2',
-    firstName: 'Marco',
-    lastName: 'De Leon',
-    email: 'marco.deleon@example.com',
-    phone: '+63 917 333 4444',
-    role: 'Manager',
-    department: 'Programs',
-    joinDate: '2023-06-18',
-  },
-  {
-    id: 'team-3',
-    firstName: 'Bianca',
-    lastName: 'Cruz',
-    email: 'bianca.cruz@example.com',
-    phone: '+63 917 555 6666',
-    role: 'Member',
-    department: 'Partnerships',
-    joinDate: '2024-01-05',
-  },
-  {
-    id: 'team-4',
-    firstName: 'Rafael',
-    lastName: 'Santos',
-    email: 'rafael.santos@example.com',
-    phone: '+63 917 777 8888',
-    role: 'Member',
-    department: 'Engineering',
-    joinDate: '2024-09-14',
-  },
-];
 
 const numberOrNull = (value: string | number | undefined | null) => {
   const parsed = Number(value);
@@ -367,7 +323,6 @@ export default function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
   const [searchQuery, setSearchQuery] = useState('');
   const [graduatedFrom, setGraduatedFrom] = useState('');
   const [graduatedTo, setGraduatedTo] = useState('');
@@ -382,8 +337,6 @@ export default function App() {
   const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showTeamForm, setShowTeamForm] = useState(false);
-  const [editingTeamMember, setEditingTeamMember] = useState<TeamMember | null>(null);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect());
@@ -944,29 +897,7 @@ export default function App() {
     }
   };
 
-  const handleAddTeamMember = () => {
-    setEditingTeamMember(null);
-    setShowTeamForm(true);
-  };
 
-  const handleEditTeamMember = (member: TeamMember) => {
-    setEditingTeamMember(member);
-    setShowTeamForm(true);
-  };
-
-  const handleSaveTeamMember = (member: TeamMember) => {
-    setTeamMembers((prev) => {
-      const exists = prev.some((m) => m.id === member.id);
-      return exists ? prev.map((m) => (m.id === member.id ? member : m)) : [...prev, member];
-    });
-
-    setEditingTeamMember(null);
-    setShowTeamForm(false);
-  };
-
-  const handleDeleteTeamMember = (memberId: string) => {
-    setTeamMembers((prev) => prev.filter((member) => member.id !== memberId));
-  };
 
   const filteredContacts = contacts.filter((contact) => {
     const query = searchQuery.trim().toLowerCase();
@@ -1042,12 +973,7 @@ export default function App() {
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
             />
           ) : activeTab === 'team' ? (
-            <Team
-              teamMembers={teamMembers}
-              onAddMember={handleAddTeamMember}
-              onEditMember={handleEditTeamMember}
-              onDeleteMember={handleDeleteTeamMember}
-            />
+            <Team />
           ) : activeTab === 'contacts' ? (
             <>
               {/* Header */}
@@ -1192,18 +1118,6 @@ export default function App() {
           contacts={contacts}
           selectedContacts={selectedContacts}
           onClose={() => setShowExport(false)}
-        />
-      )}
-
-      {/* Team Form Modal */}
-      {showTeamForm && (
-        <TeamForm
-          teamMember={editingTeamMember}
-          onClose={() => {
-            setShowTeamForm(false);
-            setEditingTeamMember(null);
-          }}
-          onSave={handleSaveTeamMember}
         />
       )}
 

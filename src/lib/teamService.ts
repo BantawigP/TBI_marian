@@ -42,6 +42,8 @@ function rowToTeamMember(row: TeamRow): TeamMember {
  * Fetch all active team members from the database
  */
 export async function fetchTeamMembers(): Promise<TeamMember[]> {
+  console.log('🔍 Fetching team members from database...');
+  
   const { data, error } = await supabase
     .from('teams')
     .select(`
@@ -52,8 +54,12 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error('❌ Error fetching team members:', error);
+    throw error;
+  }
 
+  console.log('✅ Fetched team members:', data?.length || 0, 'members');
   return (data || []).map(rowToTeamMember);
 }
 

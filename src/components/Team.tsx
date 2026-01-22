@@ -29,11 +29,14 @@ export function Team() {
     try {
       setLoading(true);
       setError(null);
+      console.log('🔄 Team component: Loading team members...');
       const data = await fetchTeamMembers();
+      console.log('✅ Team component: Loaded', data.length, 'members');
       setTeamMembers(data);
     } catch (err) {
-      console.error('Error loading team members:', err);
-      setError('Failed to load team members');
+      console.error('❌ Team component: Error loading team members:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load team members. Please check the console for details.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

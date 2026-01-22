@@ -1,6 +1,6 @@
 import { useState} from 'react';
 import { X } from 'lucide-react';
-import { TeamMember } from './Team';
+import type { TeamMember } from '../types';
 
 interface TeamFormProps {
   teamMember?: TeamMember | null;
@@ -13,11 +13,12 @@ export function TeamForm({ teamMember, onClose, onSave }: TeamFormProps) {
     id: teamMember?.id || `team-${Date.now()}`,
     firstName: teamMember?.firstName || '',
     lastName: teamMember?.lastName || '',
+    name: teamMember?.name || `${teamMember?.firstName ?? ''} ${teamMember?.lastName ?? ''}`.trim(),
     email: teamMember?.email || '',
     phone: teamMember?.phone || '',
     role: teamMember?.role || 'Member',
     department: teamMember?.department || '',
-    joinDate: teamMember?.joinDate || new Date().toISOString().split('T')[0],
+    joinedDate: teamMember?.joinedDate || new Date().toISOString().split('T')[0],
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -26,7 +27,7 @@ export function TeamForm({ teamMember, onClose, onSave }: TeamFormProps) {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+     setFormData((prev: TeamMember) => ({ ...prev, [name]: value }));
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
@@ -47,11 +48,11 @@ export function TeamForm({ teamMember, onClose, onSave }: TeamFormProps) {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-    if (!formData.department.trim()) {
+    if (!(formData.department ?? '').trim()) {
       newErrors.department = 'Department is required';
     }
-    if (!formData.joinDate) {
-      newErrors.joinDate = 'Join date is required';
+    if (!formData.joinedDate) {
+      newErrors.joinedDate = 'Join date is required';
     }
 
     setErrors(newErrors);
@@ -211,16 +212,16 @@ export function TeamForm({ teamMember, onClose, onSave }: TeamFormProps) {
               </label>
               <input
                 type="date"
-                id="joinDate"
-                name="joinDate"
-                value={formData.joinDate}
+                id="joinedDate"
+                name="joinedDate"
+                value={formData.joinedDate || ''}
                 onChange={handleChange}
                 className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 ${
-                  errors.joinDate ? 'border-red-500' : 'border-gray-200'
+                  errors.joinedDate ? 'border-red-500' : 'border-gray-200'
                 }`}
               />
-              {errors.joinDate && (
-                <p className="mt-1 text-sm text-red-500">{errors.joinDate}</p>
+              {errors.joinedDate && (
+                <p className="mt-1 text-sm text-red-500">{errors.joinedDate}</p>
               )}
             </div>
           </div>

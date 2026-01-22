@@ -8,8 +8,8 @@ interface HomeProps {
 
 export function Home({ contacts, onViewContact }: HomeProps) {
   const totalContacts = contacts.length;
-  const contactedCount = contacts.filter((c) => c.status === 'Contacted').length;
-  const pendingCount = contacts.filter((c) => c.status === 'Pending').length;
+  const contactedCount = contacts.filter((c) => c.status === 'Verified').length;
+  const pendingCount = contacts.filter((c) => c.status === 'Unverified').length;
 
   // Get recent contacts (last 5)
   const recentContacts = contacts.slice(-5).reverse();
@@ -46,7 +46,7 @@ export function Home({ contacts, onViewContact }: HomeProps) {
           <p className="text-sm text-gray-600">Total Contacts</p>
         </div>
 
-        {/* Contacted */}
+        {/* Verified */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -54,13 +54,13 @@ export function Home({ contacts, onViewContact }: HomeProps) {
             </div>
           </div>
           <h3 className="text-2xl font-semibold text-gray-900 mb-1">{contactedCount}</h3>
-          <p className="text-sm text-gray-600">Contacted</p>
+          <p className="text-sm text-gray-600">Verified</p>
           <div className="mt-2 text-xs text-gray-500">
             {totalContacts > 0 ? Math.round((contactedCount / totalContacts) * 100) : 0}% of total
           </div>
         </div>
 
-        {/* Pending */}
+        {/* Unverified */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -68,7 +68,7 @@ export function Home({ contacts, onViewContact }: HomeProps) {
             </div>
           </div>
           <h3 className="text-2xl font-semibold text-gray-900 mb-1">{pendingCount}</h3>
-          <p className="text-sm text-gray-600">Pending</p>
+          <p className="text-sm text-gray-600">Unverified</p>
           <div className="mt-2 text-xs text-gray-500">
             {totalContacts > 0 ? Math.round((pendingCount / totalContacts) * 100) : 0}% of total
           </div>
@@ -118,7 +118,7 @@ export function Home({ contacts, onViewContact }: HomeProps) {
                   <div>
                     <span
                       className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                        contact.status === 'Contacted'
+                        contact.status === 'Verified'
                           ? 'bg-green-100 text-green-700'
                           : 'bg-yellow-100 text-yellow-700'
                       }`}
@@ -166,7 +166,7 @@ export function Home({ contacts, onViewContact }: HomeProps) {
           <div>
             <h2 className="text-2xl font-semibold mb-2">Ready to connect?</h2>
             <p className="text-white/90 mb-6">
-              Reach out to your pending contacts and grow your network.
+              Reach out to your unverified contacts and grow your network.
             </p>
             <div className="flex gap-3">
               <button className="bg-white text-[#FF2B5E] px-6 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors flex items-center gap-2">
@@ -175,7 +175,7 @@ export function Home({ contacts, onViewContact }: HomeProps) {
               </button>
               <button className="bg-white/20 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/30 transition-colors flex items-center gap-2">
                 <Phone className="w-4 h-4" />
-                Call Pending Contacts
+                Call Unverified Contacts
               </button>
             </div>
           </div>

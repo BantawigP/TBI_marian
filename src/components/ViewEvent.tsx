@@ -34,10 +34,10 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Filter only contacted people who are not already attendees
+  // Filter only verified people who are not already attendees
   const contactedPeople = contacts.filter(
     (c) =>
-      c.status === 'Contacted' &&
+      c.status === 'Verified' &&
       !event.attendees.some((a) => a.id === c.id)
   );
 

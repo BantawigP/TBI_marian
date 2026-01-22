@@ -1,4 +1,4 @@
-export type ContactStatus = 'Contacted' | 'Pending';
+export type ContactStatus = 'Verified' | 'Unverified';
 
 // Frontend contact model mapped from the Supabase alumni schema
 // plus resolved dimension names for college/program/company/occupation.

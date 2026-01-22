@@ -30,8 +30,8 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
     status: c.status
   })));
 
-  // Filter only contacted people
-  const contactedPeople = contacts.filter((c) => c.status === 'Contacted');
+  // Filter only verified people
+  const contactedPeople = contacts.filter((c) => c.status === 'Verified');
 
   const filteredContacts = contactedPeople.filter((contact) =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

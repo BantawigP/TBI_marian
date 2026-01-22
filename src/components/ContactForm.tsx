@@ -39,7 +39,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     occupation: contact?.occupation || '',
     company: contact?.company || '',
     address: contact?.address || '',
-    status: contact?.status || 'Pending',
+    status: contact?.status || 'Unverified',
   });
   const [autoGenerateId, setAutoGenerateId] = useState(!contact?.id);
   const [error, setError] = useState('');

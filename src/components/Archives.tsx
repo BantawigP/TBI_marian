@@ -189,7 +189,7 @@ export function Archives({
                         <td className="p-4">
                           <span
                             className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                              contact.status === 'Contacted'
+                              contact.status === 'Verified'
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-yellow-100 text-yellow-700'
                             }`}

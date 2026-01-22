@@ -21,7 +21,7 @@ import { updateEvent, deleteEventPermanently } from './lib/eventService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
-const defaultStatus: ContactStatus = 'Contacted';
+const defaultStatus: ContactStatus = 'Verified';
 
 const numberOrNull = (value: string | number | undefined | null) => {
   const parsed = Number(value);
@@ -658,6 +658,16 @@ export default function App() {
     setShowForm(true);
   };
 
+  const handleUpdateContactStatus = (updatedContact: Contact) => {
+    // Update contact status locally (backend integration can be added later)
+    setContacts((prev) =>
+      prev.map((c) => (c.id === updatedContact.id ? updatedContact : c))
+    );
+
+    // Also update the currently viewed contact so the modal reflects the change
+    setViewingContact(updatedContact);
+  };
+
   const handleSaveContact = async (contact: Contact) => {
     const normalizedContact: Contact = {
       ...contact,
@@ -1071,6 +1081,7 @@ export default function App() {
           contact={viewingContact}
           onClose={handleCloseView}
           onEdit={handleEditContact}
+          onUpdateStatus={handleUpdateContactStatus}
         />
       )}
 

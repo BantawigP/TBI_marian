@@ -21,7 +21,7 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
       college: 'Engineering',
       program: 'Civil Engineering',
       email: 'carlos@example.com',
-      status: 'Pending',
+      status: 'Unverified',
       contactNumber: '+63 945 678 9012',
       dateGraduated: '2023-04-15',
       occupation: 'Civil Engineer',
@@ -35,7 +35,7 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
       college: 'Business',
       program: 'Finance',
       email: 'lisa@example.com',
-      status: 'Contacted',
+      status: 'Verified',
       contactNumber: '+63 956 789 0123',
       dateGraduated: '2022-05-20',
       occupation: 'Financial Analyst',
@@ -49,7 +49,7 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
       college: 'IT',
       program: 'Information Systems',
       email: 'ramon@example.com',
-      status: 'Pending',
+      status: 'Unverified',
       contactNumber: '+63 967 890 1234',
       dateGraduated: '2023-06-10',
       occupation: 'Systems Analyst',
@@ -233,7 +233,7 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
                             <td className="p-3">
                               <span
                                 className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                                  contact.status === 'Contacted'
+                                  contact.status === 'Verified'
                                     ? 'bg-green-100 text-green-700'
                                     : 'bg-yellow-100 text-yellow-700'
                                 }`}

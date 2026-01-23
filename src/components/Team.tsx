@@ -3,7 +3,12 @@ import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, User
 import type { TeamMember, TeamRole } from '../types';
 import { fetchTeamMembers, createTeamMember, deleteTeamMember } from '../lib/teamService';
 
-export function Team() {
+interface TeamProps {
+  refreshToken?: number;
+  onArchived?: (member: TeamMember) => void;
+}
+
+export function Team({ refreshToken, onArchived }: TeamProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +28,7 @@ export function Team() {
   // Load team members on mount
   useEffect(() => {
     loadTeamMembers();
-  }, []);
+  }, [refreshToken]);
 
   const loadTeamMembers = async () => {
     try {
@@ -82,10 +87,16 @@ export function Team() {
   const handleDeleteMember = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to remove ${name} from the team?`)) return;
 
+    const archivedCandidate = teamMembers.find((m) => m.id === id);
+
     try {
       setLoading(true);
       await deleteTeamMember(id);
       await loadTeamMembers();
+
+      if (archivedCandidate && onArchived) {
+        onArchived(archivedCandidate);
+      }
     } catch (err) {
       console.error('Error deleting team member:', err);
       setError('Failed to delete team member');

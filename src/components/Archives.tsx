@@ -1,25 +1,31 @@
 import { Users, Calendar, RotateCcw, Trash2, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
-import type { Contact, Event } from '../types';
+import type { Contact, Event, TeamMember } from '../types';
 
 interface ArchivesProps {
   archivedContacts: Contact[];
   archivedEvents: Event[];
+  archivedTeamMembers: TeamMember[];
   onRestoreContact: (contact: Contact) => void;
   onRestoreEvent: (event: Event) => void;
   onPermanentDeleteContact: (contactId: string) => void;
   onPermanentDeleteEvent: (eventId: string) => void | Promise<void>;
+  onRestoreTeamMember: (member: TeamMember) => void | Promise<void>;
+  onPermanentDeleteTeamMember: (memberId: string) => void | Promise<void>;
 }
 
 export function Archives({
   archivedContacts,
   archivedEvents,
+  archivedTeamMembers,
   onRestoreContact,
   onRestoreEvent,
   onPermanentDeleteContact,
   onPermanentDeleteEvent,
+  onRestoreTeamMember,
+  onPermanentDeleteTeamMember,
 }: ArchivesProps) {
-  const [activeTab, setActiveTab] = useState<'contacts' | 'events'>('contacts');
+  const [activeTab, setActiveTab] = useState<'contacts' | 'events' | 'team'>('contacts');
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -62,6 +68,22 @@ export function Archives({
     }
   };
 
+  const handleRestoreTeamMember = (member: TeamMember) => {
+    if (confirm(`Restore ${member.name}?`)) {
+      onRestoreTeamMember(member);
+    }
+  };
+
+  const handlePermanentDeleteTeamMember = (memberId: string, memberName: string) => {
+    if (
+      confirm(
+        `Permanently delete ${memberName}? This action cannot be undone.`
+      )
+    ) {
+      onPermanentDeleteTeamMember(memberId);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -86,7 +108,7 @@ export function Archives({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
@@ -109,6 +131,18 @@ export function Archives({
             </h3>
           </div>
           <p className="text-sm text-gray-600">Archived Events</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-gray-700" />
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-900">
+              {archivedTeamMembers.length}
+            </h3>
+          </div>
+          <p className="text-sm text-gray-600">Archived Users</p>
         </div>
       </div>
 
@@ -133,6 +167,16 @@ export function Archives({
           }`}
         >
           Events ({archivedEvents.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('team')}
+          className={`px-6 py-3 font-medium transition-colors ${
+            activeTab === 'team'
+              ? 'text-[#FF2B5E] border-b-2 border-[#FF2B5E]'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Users ({archivedTeamMembers.length})
         </button>
       </div>
 
@@ -235,7 +279,7 @@ export function Archives({
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === 'events' ? (
         <div>
           {archivedEvents.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -293,6 +337,95 @@ export function Archives({
               </h3>
               <p className="text-gray-600">
                 Deleted events will appear here.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          {archivedTeamMembers.length > 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                        Name
+                      </th>
+                      <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                        Email
+                      </th>
+                      <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                        Role
+                      </th>
+                      <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                        Department
+                      </th>
+                      <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                        Joined
+                      </th>
+                      <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archivedTeamMembers.map((member, index) => (
+                      <tr
+                        key={member.id}
+                        className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                          index === archivedTeamMembers.length - 1 ? 'border-b-0' : ''
+                        }`}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
+                              {member.firstName.charAt(0)}
+                              {member.lastName.charAt(0)}
+                            </div>
+                            <span className="font-medium text-gray-900">
+                              {member.firstName} {member.lastName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-gray-600">{member.email}</td>
+                        <td className="p-4 text-gray-600">{member.role}</td>
+                        <td className="p-4 text-gray-600">{member.department || '—'}</td>
+                        <td className="p-4 text-gray-600">{member.joinedDate || '—'}</td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleRestoreTeamMember(member)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Restore user"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handlePermanentDeleteTeamMember(member.id, member.name)
+                              }
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Permanently delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No Archived Users
+              </h3>
+              <p className="text-gray-600">
+                Deleted team members will appear here.
               </p>
             </div>
           )}

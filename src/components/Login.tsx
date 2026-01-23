@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Users, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Users, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 interface LoginProps {
   onLogin: () => void;
@@ -10,12 +11,30 @@ export function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Simple validation - in production you'd verify credentials
     if (email && password) {
       onLogin();
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError(null);
+    setGoogleLoading(true);
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (authError) {
+      setError(authError.message ?? 'Google sign-in failed.');
+      setGoogleLoading(false);
     }
   };
 
@@ -99,6 +118,12 @@ export function Login({ onLogin }: LoginProps) {
               </p>
             </div>
 
+            {error && (
+              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
               <div>
@@ -176,6 +201,39 @@ export function Login({ onLogin }: LoginProps) {
                 className="w-full bg-gradient-to-r from-[#FF2B5E] to-[#FF4570] text-white py-3 rounded-lg font-medium hover:from-[#E6275A] hover:to-[#E63E66] transition-all shadow-lg shadow-[#FF2B5E]/25 hover:shadow-xl hover:shadow-[#FF2B5E]/30"
               >
                 Sign In
+              </button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">or</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={googleLoading}
+                className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 text-gray-800 py-3 rounded-lg font-medium hover:border-gray-300 hover:shadow transition-all disabled:opacity-60"
+              >
+                {googleLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <svg
+                    className="w-5 h-5"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      fill="#EA4335"
+                      d="M12 10.2v3.92h5.55C17.13 16.86 14.86 18.4 12 18.4c-3.32 0-6-2.68-6-6s2.68-6 6-6c1.52 0 2.9.56 3.97 1.49l2.77-2.77C16.71 3.39 14.46 2.4 12 2.4 6.7 2.4 2.4 6.7 2.4 12S6.7 21.6 12 21.6c5.06 0 9.2-3.67 9.2-9.2 0-.62-.07-1.09-.17-1.6H12z"
+                    />
+                  </svg>
+                )}
+                <span>Continue with Google</span>
               </button>
 
               {/* Demo Credentials */}

@@ -84,24 +84,40 @@ const ensureIdByName = async (
   return (data as Record<string, any> | null)?.[idColumn] ?? null;
 };
 
-const ensureEmailId = async (email?: string): Promise<number | null> => {
+const ensureEmailId = async (email?: string, status?: ContactStatus): Promise<number | null> => {
   if (!email || !email.trim()) return null;
 
   const trimmed = email.trim().toLowerCase();
   
+  // Convert ContactStatus to boolean: 'Verified' -> true, 'Unverified' -> false
+  const statusToBoolean = (s?: ContactStatus): boolean => s === 'Verified';
+  
   // Check if email already exists
   const { data: existing } = await supabase
     .from('email_address')
-    .select('email_id')
+    .select('email_id,status')
     .eq('email', trimmed)
     .maybeSingle();
 
-  if (existing?.email_id) return existing.email_id;
+  if (existing?.email_id) {
+    // Determine final status: use provided status or keep existing, default to false (Unverified)
+    const currentBool = existing.status ?? false;
+    const newBool = status ? statusToBoolean(status) : currentBool;
+    
+    // Update status if it's different from what's in the database
+    if (status && newBool !== currentBool) {
+      await supabase
+        .from('email_address')
+        .update({ status: newBool })
+        .eq('email_id', existing.email_id);
+    }
+    return existing.email_id;
+  }
 
-  // Insert new email
+  // Insert new email with status (default to false/Unverified)
   const { data: inserted, error } = await supabase
     .from('email_address')
-    .insert({ email: trimmed })
+    .insert({ email: trimmed, status: statusToBoolean(status) })
     .select('email_id')
     .single();
 
@@ -141,7 +157,13 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
     college: row.college ?? row.college_name ?? row.colleges?.college_name ?? '',
     program: row.program ?? row.program_name ?? row.programs?.program_name ?? '',
     email: row.email_address?.email ?? '',
-    status: (row.status ?? defaultStatus) as ContactStatus,
+    status: (
+      row.email_address?.status === true ? 'Verified' :
+      row.email_address?.status === false ? 'Unverified' :
+      row.status === true ? 'Verified' :
+      row.status === false ? 'Unverified' :
+      defaultStatus
+    ) as ContactStatus,
     contactNumber: row.contact_number
       ? row.contact_number.toString()
       : row.contactNumber ?? '',
@@ -193,7 +215,7 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
 };
 
 const CONTACT_SELECT_BASE =
-  'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email)';
+  'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
 const CONTACT_SELECT_WITH_ADDRESS = `${CONTACT_SELECT_BASE},alumniaddress_id`;
 
 let supportsAlumniAddressColumn = true;
@@ -393,8 +415,8 @@ export default function App() {
 
   const eventAlumniFields = () =>
     supportsAlumniAddressColumn
-      ? 'alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email)'
-      : 'alumni_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email)';
+      ? 'alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)'
+      : 'alumni_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
 
   const fetchEventsFromSupabase = async (): Promise<Event[]> => {
     const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
@@ -444,7 +466,7 @@ export default function App() {
       ensureIdByName('companies', 'company_name', 'company_id', contact.company),
       ensureIdByName('occupations', 'occupation_title', 'occupation_id', contact.occupation),
       ensureIdByName('locations', 'name', 'location_id', contact.address),
-      ensureEmailId(contact.email),
+      ensureEmailId(contact.email, contact.status),
     ]);
 
     const payload: Record<string, any> = {
@@ -725,14 +747,25 @@ export default function App() {
     setShowForm(true);
   };
 
-  const handleUpdateContactStatus = (updatedContact: Contact) => {
-    // Update contact status locally (backend integration can be added later)
+  const handleUpdateContactStatus = async (updatedContact: Contact) => {
+    // Update contact status locally
     setContacts((prev) =>
       prev.map((c) => (c.id === updatedContact.id ? updatedContact : c))
     );
 
     // Also update the currently viewed contact so the modal reflects the change
     setViewingContact(updatedContact);
+
+    // Update status in backend via email_address table
+    try {
+      if (updatedContact.email) {
+        await ensureEmailId(updatedContact.email, updatedContact.status);
+        console.log('✅ Contact status updated in email_address table');
+      }
+    } catch (error) {
+      console.error('❌ Failed to update contact status in backend:', error);
+      setSyncError('Failed to update contact status in database.');
+    }
   };
 
   const handleSaveContact = async (contact: Contact) => {

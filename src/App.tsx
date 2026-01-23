@@ -15,9 +15,14 @@ import { ExportContact } from './components/ExportContact';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
-import type { Contact, ContactStatus, Event } from './types';
+import type { Contact, ContactStatus, Event, TeamMember } from './types';
 import { supabase } from './lib/supabaseClient';
 import { updateEvent, deleteEventPermanently } from './lib/eventService';
+import {
+  fetchArchivedTeamMembers,
+  restoreTeamMember,
+  deleteTeamMemberPermanently,
+} from './lib/teamService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -352,6 +357,7 @@ export default function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
+  const [archivedTeamMembers, setArchivedTeamMembers] = useState<TeamMember[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [graduatedFrom, setGraduatedFrom] = useState('');
   const [graduatedTo, setGraduatedTo] = useState('');
@@ -366,6 +372,7 @@ export default function App() {
   const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [teamRefreshToken, setTeamRefreshToken] = useState(0);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect());
@@ -423,6 +430,11 @@ export default function App() {
     }
 
     return (data ?? []).map(mapEventRowToEvent);
+  };
+
+  const fetchArchivedTeamMembersFromSupabase = async (): Promise<TeamMember[]> => {
+    const data = await fetchArchivedTeamMembers();
+    return data;
   };
 
   const persistContactToSupabase = async (contact: Contact): Promise<Contact> => {
@@ -595,16 +607,18 @@ export default function App() {
       try {
         console.log('🔄 Starting to fetch data from Supabase...');
         
-        const [loadedContacts, loadedEvents, loadedArchivedEvents] = await Promise.all([
+        const [loadedContacts, loadedEvents, loadedArchivedEvents, loadedArchivedTeams] = await Promise.all([
           fetchContactsFromSupabase(),
           fetchEventsFromSupabase(),
           fetchArchivedEventsFromSupabase(),
+          fetchArchivedTeamMembersFromSupabase(),
         ]);
 
         console.log('✅ Data fetched successfully!');
         console.log('  - Contacts:', loadedContacts.length);
         console.log('  - Events:', loadedEvents.length);
         console.log('  - Archived Events:', loadedArchivedEvents.length);
+        console.log('  - Archived Team Members:', loadedArchivedTeams.length);
 
         if (!isMounted) return;
 
@@ -620,6 +634,9 @@ export default function App() {
         
         setArchivedEvents(loadedArchivedEvents);
         console.log('✅ Archived events state updated');
+
+        setArchivedTeamMembers(loadedArchivedTeams);
+        console.log('✅ Archived team members state updated');
       } catch (error) {
         console.error('❌ Supabase: failed to load data', error);
         console.error('Error details:', {
@@ -652,6 +669,17 @@ export default function App() {
       isMounted = false;
     };
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'archives') return;
+
+    fetchArchivedTeamMembersFromSupabase()
+      .then((teams) => setArchivedTeamMembers(teams))
+      .catch((error) => {
+        console.error('❌ Failed to refresh archived team members', error);
+        setSyncError('Unable to refresh archived team members.');
+      });
+  }, [activeTab, isLoggedIn]);
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -946,6 +974,46 @@ export default function App() {
     }
   };
 
+  const handleRestoreTeamMember = async (member: TeamMember) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      await restoreTeamMember(member.id);
+      setArchivedTeamMembers((prev) => prev.filter((m) => m.id !== member.id));
+      setTeamRefreshToken((token) => token + 1);
+    } catch (error) {
+      console.error('❌ Failed to restore team member', error);
+      setSyncError('Failed to restore team member from Supabase.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePermanentDeleteTeamMember = async (id: string) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      await deleteTeamMemberPermanently(id);
+      setArchivedTeamMembers((prev) => prev.filter((m) => m.id !== id));
+      setTeamRefreshToken((token) => token + 1);
+    } catch (error) {
+      console.error('❌ Failed to permanently delete team member', error);
+      setSyncError('Failed to permanently delete team member from Supabase.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleArchiveTeamMemberLocal = (member: TeamMember) => {
+    setArchivedTeamMembers((prev) => {
+      const exists = prev.some((m) => m.id === member.id);
+      return exists ? prev : [...prev, member];
+    });
+    setTeamRefreshToken((token) => token + 1);
+  };
+
 
 
   const filteredContacts = contacts.filter((contact) => {
@@ -1016,13 +1084,19 @@ export default function App() {
             <Archives
               archivedContacts={archivedContacts}
               archivedEvents={archivedEvents}
+              archivedTeamMembers={archivedTeamMembers}
               onRestoreContact={handleRestoreContact}
               onRestoreEvent={handleRestoreEvent}
+              onRestoreTeamMember={handleRestoreTeamMember}
               onPermanentDeleteContact={handlePermanentDeleteContact}
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
+              onPermanentDeleteTeamMember={handlePermanentDeleteTeamMember}
             />
           ) : activeTab === 'team' ? (
-            <Team />
+            <Team
+              refreshToken={teamRefreshToken}
+              onArchived={handleArchiveTeamMemberLocal}
+            />
           ) : activeTab === 'contacts' ? (
             <>
               {/* Header */}

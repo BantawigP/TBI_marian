@@ -64,6 +64,28 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
 }
 
 /**
+ * Fetch all inactive (archived) team members from the database
+ */
+export async function fetchArchivedTeamMembers(): Promise<TeamMember[]> {
+  const { data, error } = await supabase
+    .from('teams')
+    .select(`
+      *,
+      roles(id, role_name),
+      departments(id, department_name)
+    `)
+    .eq('is_active', false)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ Error fetching archived team members:', error);
+    throw error;
+  }
+
+  return (data || []).map(rowToTeamMember);
+}
+
+/**
  * Helper to get role ID by name
  */
 async function getRoleIdByName(roleName: string): Promise<number | null> {
@@ -229,6 +251,30 @@ export async function deleteTeamMember(id: string): Promise<void> {
   const { error } = await supabase
     .from('teams')
     .update({ is_active: false })
+    .eq('id', parseInt(id));
+
+  if (error) throw error;
+}
+
+/**
+ * Restore a soft-deleted team member (set is_active back to true)
+ */
+export async function restoreTeamMember(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('teams')
+    .update({ is_active: true })
+    .eq('id', parseInt(id));
+
+  if (error) throw error;
+}
+
+/**
+ * Permanently delete a team member
+ */
+export async function deleteTeamMemberPermanently(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('teams')
+    .delete()
     .eq('id', parseInt(id));
 
   if (error) throw error;

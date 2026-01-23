@@ -402,8 +402,8 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                       onChange={(e) => handleChange('status', e.target.value as ContactStatus)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                     >
-                      <option value="Pending">Unverified</option>
-                      <option value="Contacted">Verified</option>
+                      <option value="Verified">Verified</option>
+                      <option value="Unverified">Unverified</option>
                     </select>
                   </div>
                 </div>

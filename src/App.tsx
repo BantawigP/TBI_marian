@@ -396,6 +396,28 @@ export default function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
 
+  // Keep UI auth state in sync with Supabase session (Google OAuth, etc.)
+  useEffect(() => {
+    let isMounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (isMounted) {
+        setIsLoggedIn(!!data.session);
+      }
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) {
+        setIsLoggedIn(!!session);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.subscription.unsubscribe();
+    };
+  }, []);
+
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null');
 

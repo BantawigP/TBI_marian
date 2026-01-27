@@ -13,6 +13,7 @@ interface TeamRow {
   joined_date: string | null;
   avatar_color: string | null;
   is_active: boolean;
+  has_access: boolean | null;
   roles?: { id: number; role_name: string } | null;
   departments?: { id: number; department_name: string } | null;
 }
@@ -35,6 +36,7 @@ function rowToTeamMember(row: TeamRow): TeamMember {
     phone: row.phone || undefined,
     joinedDate: row.joined_date ? new Date(row.joined_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : undefined,
     avatarColor: row.avatar_color || '#FF2B5E',
+    hasAccess: row.has_access ?? undefined,
   };
 }
 
@@ -278,4 +280,106 @@ export async function deleteTeamMemberPermanently(id: string): Promise<void> {
     .eq('id', parseInt(id));
 
   if (error) throw error;
+}
+
+/**
+ * Grant system access to a team member by sending a magic link invitation
+ * @param teamMemberId - The ID of the team member
+ * @param email - The email to send the invitation to
+ * @param role - The role to grant (Manager or Member)
+ */
+export async function grantAccess(
+  teamMemberId: string,
+  email: string,
+  role: 'Manager' | 'Member'
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // Get current session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      throw new Error('Authentication error. Please log in again.');
+    }
+    
+    if (!session) {
+      console.error('No active session found');
+      throw new Error('You must be logged in to grant access. Please log in again.');
+    }
+
+    console.log('✓ Session found, granting access...');
+
+    // Call the grant-access Edge Function
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/grant-access`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          teamMemberId: parseInt(teamMemberId),
+          email,
+          role,
+        }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to grant access');
+    }
+
+    return {
+      success: true,
+      message: result.message || 'Access invitation sent successfully',
+    };
+  } catch (error) {
+    console.error('Error granting access:', error);
+    throw error;
+  }
+}
+
+/**
+ * Claim an access invitation using a token
+ * @param token - The invitation token from the magic link
+ */
+export async function claimAccess(token: string): Promise<{ success: boolean; message: string }> {
+  try {
+    // Get current session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('You must be signed in to claim access');
+    }
+
+    // Call the claim-access Edge Function
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claim-access`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to claim access');
+    }
+
+    return {
+      success: true,
+      message: result.message || 'Access granted successfully',
+    };
+  } catch (error) {
+    console.error('Error claiming access:', error);
+    throw error;
+  }
 }

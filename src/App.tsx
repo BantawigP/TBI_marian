@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Login } from './components/Login';
+import { ClaimAccess } from './components/ClaimAccess';
 import { Sidebar } from './components/Sidebar';
 import { Home } from './components/Home';
 import { Events } from './components/Events';
@@ -373,6 +374,7 @@ const saveAlumniAddressLink = async (
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showClaimAccess, setShowClaimAccess] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -395,6 +397,14 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
+
+  // Check if URL contains claim-access token
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('token')) {
+      setShowClaimAccess(true);
+    }
+  }, []);
 
   // Keep UI auth state in sync with Supabase session (Google OAuth, etc.)
   useEffect(() => {
@@ -419,12 +429,29 @@ export default function App() {
   }, []);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
-    let { data, error } = await supabase.from('alumni').select(getContactSelect());
+    let { data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null');
 
     if (error && error.code === '42703') {
       noteMissingAlumniAddressColumn();
       supportsAlumniAddressColumn = false;
-      ({ data, error } = await supabase.from('alumni').select(getContactSelect()));
+      ({ data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null'));
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    const contacts = (data ?? []).map(mapContactRowToContact);
+    return hydrateContactsWithAddresses(contacts);
+  };
+
+  const fetchArchivedContactsFromSupabase = async (): Promise<Contact[]> => {
+    let { data, error } = await supabase.from('alumni').select(getContactSelect()).eq('is_active', false);
+
+    if (error && error.code === '42703') {
+      noteMissingAlumniAddressColumn();
+      supportsAlumniAddressColumn = false;
+      ({ data, error } = await supabase.from('alumni').select(getContactSelect()).eq('is_active', false));
     }
 
     if (error) {
@@ -621,6 +648,103 @@ export default function App() {
     console.log('✅ Successfully added', rows.length, 'attendees to event');
   };
 
+  const deleteContactFromSupabase = async (contactId: string) => {
+    const numericAlumniId = numberOrNull(contactId);
+    if (!numericAlumniId) return;
+
+    // Soft delete: mark as inactive instead of deleting
+    const { error } = await supabase
+      .from('alumni')
+      .update({ is_active: false })
+      .eq('alumni_id', numericAlumniId);
+
+    if (error) {
+      console.error('❌ Failed to mark contact as inactive:', error);
+      throw error;
+    }
+
+    console.log('✅ Contact marked as inactive (soft deleted):', numericAlumniId);
+  };
+
+  const deleteContactPermanently = async (contactId: string) => {
+    const numericAlumniId = numberOrNull(contactId);
+
+    if (!numericAlumniId) {
+      throw new Error('Invalid contact ID; cannot delete');
+    }
+
+    // Delete related records first to maintain referential integrity
+    
+    // 1. Delete event participations
+    const { error: participantsError } = await supabase
+      .from('event_participants')
+      .delete()
+      .eq('alumni_id', numericAlumniId);
+
+    if (participantsError) {
+      console.error('❌ Failed to delete event participants:', participantsError);
+      throw participantsError;
+    }
+
+    // 2. Delete alumni addresses
+    const { error: addressError } = await supabase
+      .from('alumni_addresses')
+      .delete()
+      .eq('alumni_id', numericAlumniId);
+
+    if (addressError) {
+      console.error('❌ Failed to delete alumni addresses:', addressError);
+      throw addressError;
+    }
+
+    // 3. Finally delete the alumni record
+    const { error: alumniError } = await supabase
+      .from('alumni')
+      .delete()
+      .eq('alumni_id', numericAlumniId);
+
+    if (alumniError) {
+      console.error('❌ Failed to delete alumni record:', alumniError);
+      throw alumniError;
+    }
+
+    console.log('✅ Contact permanently deleted:', numericAlumniId);
+  };
+
+  const restoreContactInSupabase = async (contactId: string) => {
+    const numericAlumniId = numberOrNull(contactId);
+    if (!numericAlumniId) return;
+
+    const { error } = await supabase
+      .from('alumni')
+      .update({ is_active: true })
+      .eq('alumni_id', numericAlumniId);
+
+    if (error) {
+      console.error('❌ Failed to restore contact in database:', error);
+      throw error;
+    }
+
+    console.log('✅ Contact restored (marked active):', numericAlumniId);
+  };
+
+  const restoreEventInSupabase = async (eventId: string) => {
+    const numericEventId = numberOrNull(eventId);
+    if (!numericEventId) return;
+
+    const { error } = await supabase
+      .from('events')
+      .update({ is_active: true })
+      .eq('event_id', numericEventId);
+
+    if (error) {
+      console.error('❌ Failed to restore event in database:', error);
+      throw error;
+    }
+
+    console.log('✅ Event restored (marked active):', numericEventId);
+  };
+
   const deleteEventFromSupabase = async (eventId: string) => {
     const numericEventId = numberOrNull(eventId);
     if (!numericEventId) return;
@@ -651,9 +775,10 @@ export default function App() {
       try {
         console.log('🔄 Starting to fetch data from Supabase...');
         
-        const [loadedContacts, loadedEvents, loadedArchivedEvents, loadedArchivedTeams] = await Promise.all([
+        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams] = await Promise.all([
           fetchContactsFromSupabase(),
           fetchEventsFromSupabase(),
+          fetchArchivedContactsFromSupabase(),
           fetchArchivedEventsFromSupabase(),
           fetchArchivedTeamMembersFromSupabase(),
         ]);
@@ -661,6 +786,7 @@ export default function App() {
         console.log('✅ Data fetched successfully!');
         console.log('  - Contacts:', loadedContacts.length);
         console.log('  - Events:', loadedEvents.length);
+        console.log('  - Archived Contacts:', loadedArchivedContacts.length);
         console.log('  - Archived Events:', loadedArchivedEvents.length);
         console.log('  - Archived Team Members:', loadedArchivedTeams.length);
 
@@ -675,6 +801,9 @@ export default function App() {
 
         setEvents(loadedEvents);
         console.log('✅ Events state updated');
+        
+        setArchivedContacts(loadedArchivedContacts);
+        console.log('✅ Archived contacts state updated');
         
         setArchivedEvents(loadedArchivedEvents);
         console.log('✅ Archived events state updated');
@@ -732,9 +861,6 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      // Clear any persisted browser data after sign-out
-      localStorage.clear();
-      sessionStorage.clear();
     } catch (error) {
       console.error('Supabase: failed to sign out', error);
     }
@@ -1002,18 +1128,56 @@ export default function App() {
     });
   };
 
-  const handleRestoreContact = (contact: Contact) => {
+  const handleRestoreContact = async (contact: Contact) => {
+    // Update local state immediately
     setContacts([...contacts, contact]);
     setArchivedContacts(archivedContacts.filter((c) => c.id !== contact.id));
+    
+    // Update database
+    setIsSyncing(true);
+    try {
+      await restoreContactInSupabase(contact.id);
+      console.log('✅ Contact restored in database');
+    } catch (error) {
+      console.error('❌ Failed to restore contact in database:', error);
+      setSyncError('Contact restored locally but failed to update in database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const handleRestoreEvent = (event: Event) => {
+  const handleRestoreEvent = async (event: Event) => {
+    // Update local state immediately
     setEvents([...events, event]);
     setArchivedEvents(archivedEvents.filter((e) => e.id !== event.id));
+    
+    // Update database
+    setIsSyncing(true);
+    try {
+      await restoreEventInSupabase(event.id);
+      console.log('✅ Event restored in database');
+    } catch (error) {
+      console.error('❌ Failed to restore event in database:', error);
+      setSyncError('Event restored locally but failed to update in database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const handlePermanentDeleteContact = (contactId: string) => {
-    setArchivedContacts(archivedContacts.filter((c) => c.id !== contactId));
+  const handlePermanentDeleteContact = async (contactId: string) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      await deleteContactPermanently(contactId);
+      setArchivedContacts((prev) => prev.filter((c) => c.id !== contactId));
+      console.log('✅ Contact permanently deleted from database');
+    } catch (error) {
+      console.error('❌ Failed to permanently delete contact', error);
+      setSyncError('Failed to permanently delete contact from database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handlePermanentDeleteEvent = async (eventId: string) => {
@@ -1105,8 +1269,18 @@ export default function App() {
   });
 
   // Show login page if not logged in
-  if (!isLoggedIn) {
+  if (!isLoggedIn && !showClaimAccess) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  // Show claim access page if token is present
+  if (showClaimAccess) {
+    return <ClaimAccess onSuccess={() => {
+      setShowClaimAccess(false);
+      setIsLoggedIn(true);
+      // Clear token from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }} />;
   }
 
   return (
@@ -1320,14 +1494,28 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setArchivedContacts((prev) => [
-                    ...prev,
-                    ...contacts.filter((c) => selectedContacts.includes(c.id)),
-                  ]);
+                onClick={async () => {
+                  const contactsToArchive = contacts.filter((c) => selectedContacts.includes(c.id));
+                  
+                  // Update local state immediately
+                  setArchivedContacts((prev) => [...prev, ...contactsToArchive]);
                   setContacts((prev) => prev.filter((c) => !selectedContacts.includes(c.id)));
                   setSelectedContacts([]);
                   setShowDeleteConfirm(false);
+                  
+                  // Soft delete in database
+                  setIsSyncing(true);
+                  try {
+                    for (const contact of contactsToArchive) {
+                      await deleteContactFromSupabase(contact.id);
+                    }
+                    console.log(`✅ Successfully archived ${contactsToArchive.length} contact(s) in database`);
+                  } catch (error) {
+                    console.error('❌ Failed to archive contacts in database:', error);
+                    setSyncError('Contacts archived locally but failed to update in database.');
+                  } finally {
+                    setIsSyncing(false);
+                  }
                 }}
                 className="px-5 py-2.5 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
               >

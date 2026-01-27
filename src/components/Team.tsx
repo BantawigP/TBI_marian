@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X } from 'lucide-react';
+import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key } from 'lucide-react';
 import type { TeamMember, TeamRole } from '../types';
-import { fetchTeamMembers, createTeamMember, deleteTeamMember } from '../lib/teamService';
+import { fetchTeamMembers, createTeamMember, deleteTeamMember, grantAccess } from '../lib/teamService';
 
 interface TeamProps {
   refreshToken?: number;
@@ -100,6 +100,36 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     } catch (err) {
       console.error('Error deleting team member:', err);
       setError('Failed to delete team member');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGrantAccess = async (member: TeamMember) => {
+    if (member.hasAccess) {
+      setError('This member already has system access');
+      return;
+    }
+
+    if (member.role !== 'Manager' && member.role !== 'Member') {
+      setError('Only Manager and Member roles can be granted access');
+      return;
+    }
+
+    if (!confirm(`Send access invitation to ${member.name} (${member.email})?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await grantAccess(member.id, member.email, member.role);
+      alert(result.message + '\n\nA magic link has been sent to ' + member.email);
+      await loadTeamMembers(); // Reload to update has_access status
+    } catch (err) {
+      console.error('Error granting access:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to grant access';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -333,13 +363,29 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
+                  {/* Show Grant Access button for Manager/Member without access */}
+                  {(member.role === 'Manager' || member.role === 'Member') && !member.hasAccess ? (
+                    <button
+                      onClick={() => handleGrantAccess(member)}
+                      disabled={loading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                    >
+                      <Key className="w-4 h-4" />
+                      Grant Access
+                    </button>
+                  ) : member.hasAccess ? (
+                    <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
+                      <Key className="w-4 h-4" />
+                      Has Access
+                    </div>
+                  ) : null}
+                  
                   <button
                     onClick={() => {}}
                     disabled={loading}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
                   >
                     <Edit2 className="w-4 h-4" />
-                    Edit
                   </button>
                   <button
                     onClick={() => handleDeleteMember(member.id, member.name)}

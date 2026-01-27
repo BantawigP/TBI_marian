@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Login } from './components/Login';
+import { ClaimAccess } from './components/ClaimAccess';
 import { Sidebar } from './components/Sidebar';
 import { Home } from './components/Home';
 import { Events } from './components/Events';
@@ -373,6 +374,7 @@ const saveAlumniAddressLink = async (
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showClaimAccess, setShowClaimAccess] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -395,6 +397,14 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
+
+  // Check if URL contains claim-access token
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('token')) {
+      setShowClaimAccess(true);
+    }
+  }, []);
 
   // Keep UI auth state in sync with Supabase session (Google OAuth, etc.)
   useEffect(() => {
@@ -851,9 +861,6 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      // Clear any persisted browser data after sign-out
-      localStorage.clear();
-      sessionStorage.clear();
     } catch (error) {
       console.error('Supabase: failed to sign out', error);
     }
@@ -1260,8 +1267,18 @@ export default function App() {
   });
 
   // Show login page if not logged in
-  if (!isLoggedIn) {
+  if (!isLoggedIn && !showClaimAccess) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  // Show claim access page if token is present
+  if (showClaimAccess) {
+    return <ClaimAccess onSuccess={() => {
+      setShowClaimAccess(false);
+      setIsLoggedIn(true);
+      // Clear token from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }} />;
   }
 
   return (

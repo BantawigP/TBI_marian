@@ -52,4 +52,5 @@ export interface TeamMember {
   avatarColor?: string;
   phone?: string;
   joinedDate?: string;
+  hasAccess?: boolean;
 }

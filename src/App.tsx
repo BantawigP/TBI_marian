@@ -13,6 +13,7 @@ import { ContactForm } from './components/ContactForm';
 import { ViewContact } from './components/ViewContact';
 import { ImportContact } from './components/ImportContact';
 import { ExportContact } from './components/ExportContact';
+import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
@@ -1328,6 +1329,8 @@ export default function App() {
               refreshToken={teamRefreshToken}
               onArchived={handleArchiveTeamMemberLocal}
             />
+          ) : activeTab === 'preview' ? (
+            <FormPreview />
           ) : activeTab === 'contacts' ? (
             <>
               {/* Header */}

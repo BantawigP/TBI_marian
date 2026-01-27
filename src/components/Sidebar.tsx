@@ -14,7 +14,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
     { icon: UserCog, label: 'Team', value: 'team' },
     { icon: Calendar, label: 'Events', value: 'events' },
     { icon: Archive, label: 'Archives', value: 'archives' },
-    { icon: FileText, label: 'Requests', value: 'requests' },
+    { icon: FileText, label: 'Form Preview', value: 'preview' },
   ];
 
   return (

@@ -1,5 +1,7 @@
 import { X, Mail, Phone, Building2, GraduationCap, Briefcase, Calendar, MapPin } from 'lucide-react';
+import { useState } from 'react';
 import type { Contact } from '../types';
+import { sendVerificationEmail } from './email/sendVerificationEmail';
 
 interface ViewContactProps {
   contact: Contact;
@@ -9,20 +11,40 @@ interface ViewContactProps {
   onUpdateStatus?: (contact: Contact) => void;
 }
 
-export function ViewContact({ contact, onClose, onEdit, onUpdateStatus }: ViewContactProps) {
+export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
+  const [isSendingVerification, setIsSendingVerification] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationSent, setVerificationSent] = useState(false);
+
   const handleEdit = () => {
     onEdit(contact);
   };
 
-  const handleSendVerification = () => {
-    // For now, simulate a successful verification by marking as "Verified"
-    const updatedContact: Contact = {
-      ...contact,
-      status: 'Verified',
-    };
+  const handleSendVerification = async () => {
+    if (isSendingVerification) return;
 
-    if (onUpdateStatus) {
-      onUpdateStatus(updatedContact);
+    setVerificationError(null);
+    setVerificationSent(false);
+
+    const email = contact.email?.trim();
+    if (!email) {
+      setVerificationError('This contact has no email address.');
+      return;
+    }
+
+    setIsSendingVerification(true);
+    try {
+      await sendVerificationEmail({
+        to: email,
+        firstName: contact.firstName,
+        brandName: 'Marian Alumni Network',
+      });
+      setVerificationSent(true);
+    } catch (err) {
+      console.error('Failed to send verification email', err);
+      setVerificationError('Unable to send verification email right now. Please try again.');
+    } finally {
+      setIsSendingVerification(false);
     }
   };
 
@@ -67,12 +89,20 @@ export function ViewContact({ contact, onClose, onEdit, onUpdateStatus }: ViewCo
                   <button
                     type="button"
                     onClick={handleSendVerification}
-                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-[#FF2B5E] text-[#FF2B5E] hover:bg-[#FF2B5E] hover:text-white transition-colors"
+                    disabled={isSendingVerification}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-[#FF2B5E] text-[#FF2B5E] hover:bg-[#FF2B5E] hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Send Verification
+                    {isSendingVerification ? 'Sending…' : 'Send Verification'}
                   </button>
                 )}
               </div>
+
+              {verificationError && (
+                <p className="mt-2 text-sm text-red-600">{verificationError}</p>
+              )}
+              {verificationSent && !verificationError && (
+                <p className="mt-2 text-sm text-green-700">Verification email sent.</p>
+              )}
             </div>
 
             {/* Contact Information */}

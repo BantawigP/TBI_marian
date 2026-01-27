@@ -1,29 +1,22 @@
 import { supabase } from '../../lib/supabaseClient';
-import {
-  renderVerifyEmailHTML,
-  renderVerifyEmailText,
-  type VerifyEmailTemplateProps,
-} from './verifyEmailTemplate';
 
-export interface SendVerificationEmailParams extends VerifyEmailTemplateProps {
+export interface SendVerificationEmailParams {
   to: string;
   subject?: string;
+  firstName?: string;
+  brandName?: string;
 }
 
 // Client-side helper that calls the Supabase Edge Function `send-verification`.
-// The Edge Function should take { to, subject, html, text } and send via SMTP (already configured in Supabase).
+// The Edge Function generates a one-time token + verification URL and sends via SendGrid (or any provider) server-side.
 export async function sendVerificationEmail({
   to,
   subject = 'Please verify your email',
   firstName,
-  verifyUrl,
   brandName,
 }: SendVerificationEmailParams) {
-  const html = renderVerifyEmailHTML({ firstName, verifyUrl, brandName });
-  const text = renderVerifyEmailText({ firstName, verifyUrl, brandName });
-
   const { data, error } = await supabase.functions.invoke('send-verification', {
-    body: { to, subject, html, text },
+    body: { to, subject, firstName, brandName },
   });
 
   if (error) {

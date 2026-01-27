@@ -765,6 +765,8 @@ export default function App() {
   };
 
   const handleEditContact = (contact: Contact) => {
+    // Close the view modal so the edit form sits on top without being obscured
+    setViewingContact(null);
     setEditingContact(contact);
     setShowForm(true);
   };

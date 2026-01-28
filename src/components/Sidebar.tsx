@@ -23,10 +23,10 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
       <div className="p-6 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
-            <img src={logo} alt="Marian TBI Connect" className="w-6 h-6" />
+            <img src={logo} alt="MARIAN TBI Connect" className="w-6 h-6" />
           </div>
           <div>
-            <div className="font-semibold text-sm">Marian TBI Connect</div>
+            <div className="font-semibold text-sm">MARIAN TBI Connect</div>
           </div>
         </div>
       </div>

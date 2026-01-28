@@ -305,7 +305,7 @@ export function AlumniForm() {
           </div>
           <h2 className="text-3xl font-semibold text-gray-900 mb-4">Thank You!</h2>
           <p className="text-lg text-gray-600 mb-6">
-            Your information has been successfully submitted to the Marian TBI Connect alumni database.
+            Your information has been successfully submitted to the MARIAN TBI Connect alumni database.
           </p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
             <p className="text-sm text-blue-900">
@@ -336,7 +336,7 @@ export function AlumniForm() {
                 <FileText className="w-8 h-8" />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-semibold">Marian TBI Connect</h1>
+                <h1 className="text-3xl md:text-4xl font-semibold">MARIAN TBI Connect</h1>
                 <p className="text-white/90 text-lg">Alumni Information Form</p>
               </div>
             </div>
@@ -633,7 +633,7 @@ export function AlumniForm() {
                 </a>
               </p>
               <p className="text-xs text-gray-500">
-                © 2026 Marian TBI Connect. All rights reserved.
+                © 2026 MARIAN TBI Connect. All rights reserved.
               </p>
             </div>
           </div>

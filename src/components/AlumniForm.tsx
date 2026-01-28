@@ -477,7 +477,7 @@ export function AlumniForm() {
                       <option value="">Select College</option>
                       <option value="Business">College of Business</option>
                       <option value="Engineering">College of Engineering</option>
-                      <option value="IT">College of Information Technology</option>
+                      <option value="IT">College of Computer Studies</option>
                       <option value="Arts">College of Arts and Sciences</option>
                       <option value="Education">College of Education</option>
                       <option value="Health Sciences">College of Health Sciences</option>

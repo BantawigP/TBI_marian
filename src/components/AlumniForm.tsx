@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { FileText, User, Mail, Phone, GraduationCap, Briefcase, Building2, Calendar, Check, CheckCircle } from 'lucide-react';
+import { FileText, User, Mail, Phone, GraduationCap, Briefcase, Building2, Calendar, Check, CheckCircle, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
+import { toast } from 'sonner';
 
 export function AlumniForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -51,29 +54,230 @@ export function AlumniForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      // Here you would typically send the data to your backend
-      console.log('Form submitted:', formData);
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Check if email already exists in email_address table
+      const { data: existingEmail, error: emailCheckError } = await supabase
+        .from('email_address')
+        .select('email_id, email')
+        .eq('email', formData.email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (emailCheckError && emailCheckError.code !== 'PGRST116') {
+        throw emailCheckError;
+      }
+
+      let emailId: number | null = null;
+
+      if (existingEmail) {
+        // Email already exists, check if it's linked to an alumni
+        const { data: existingAlumni, error: alumniCheckError } = await supabase
+          .from('alumni')
+          .select('alumni_id')
+          .eq('email_id', existingEmail.email_id)
+          .maybeSingle();
+
+        if (alumniCheckError && alumniCheckError.code !== 'PGRST116') {
+          throw alumniCheckError;
+        }
+
+        if (existingAlumni) {
+          setErrors({ email: 'This email address is already registered in our alumni database.' });
+          toast.error('Email already registered');
+          setIsSubmitting(false);
+          return;
+        }
+
+        emailId = existingEmail.email_id;
+      } else {
+        // Create new email address entry
+        const { data: newEmail, error: insertEmailError } = await supabase
+          .from('email_address')
+          .insert({ email: formData.email.toLowerCase().trim(), status: false })
+          .select('email_id')
+          .single();
+
+        if (insertEmailError) throw insertEmailError;
+        emailId = newEmail.email_id;
+      }
+
+      // Get or create college
+      let collegeId: number | null = null;
+      if (formData.college) {
+        const { data: collegeData, error: collegeError } = await supabase
+          .from('colleges')
+          .select('college_id')
+          .eq('college_name', formData.college)
+          .maybeSingle();
+
+        if (collegeError && collegeError.code !== 'PGRST116') {
+          throw collegeError;
+        }
+
+        if (collegeData) {
+          collegeId = collegeData.college_id;
+        } else {
+          const { data: newCollege, error: insertCollegeError } = await supabase
+            .from('colleges')
+            .insert({ college_name: formData.college })
+            .select('college_id')
+            .single();
+
+          if (insertCollegeError) throw insertCollegeError;
+          collegeId = newCollege.college_id;
+        }
+      }
+
+      // Get or create program
+      let programId: number | null = null;
+      if (formData.program) {
+        const { data: programData, error: programError } = await supabase
+          .from('programs')
+          .select('program_id')
+          .eq('program_name', formData.program)
+          .maybeSingle();
+
+        if (programError && programError.code !== 'PGRST116') {
+          throw programError;
+        }
+
+        if (programData) {
+          programId = programData.program_id;
+        } else {
+          const { data: newProgram, error: insertProgramError } = await supabase
+            .from('programs')
+            .insert({ program_name: formData.program })
+            .select('program_id')
+            .single();
+
+          if (insertProgramError) throw insertProgramError;
+          programId = newProgram.program_id;
+        }
+      }
+
+      // Get or create company (if provided)
+      let companyId: number | null = null;
+      if (formData.company.trim()) {
+        const { data: companyData, error: companyError } = await supabase
+          .from('companies')
+          .select('company_id')
+          .eq('company_name', formData.company.trim())
+          .maybeSingle();
+
+        if (companyError && companyError.code !== 'PGRST116') {
+          throw companyError;
+        }
+
+        if (companyData) {
+          companyId = companyData.company_id;
+        } else {
+          const { data: newCompany, error: insertCompanyError } = await supabase
+            .from('companies')
+            .insert({ company_name: formData.company.trim() })
+            .select('company_id')
+            .single();
+
+          if (insertCompanyError) throw insertCompanyError;
+          companyId = newCompany.company_id;
+        }
+      }
+
+      // Get or create occupation (if provided)
+      let occupationId: number | null = null;
+      if (formData.occupation.trim()) {
+        const { data: occupationData, error: occupationError } = await supabase
+          .from('occupations')
+          .select('occupation_id')
+          .eq('occupation_title', formData.occupation.trim())
+          .maybeSingle();
+
+        if (occupationError && occupationError.code !== 'PGRST116') {
+          throw occupationError;
+        }
+
+        if (occupationData) {
+          occupationId = occupationData.occupation_id;
+        } else {
+          const { data: newOccupation, error: insertOccupationError } = await supabase
+            .from('occupations')
+            .insert({ occupation_title: formData.occupation.trim() })
+            .select('occupation_id')
+            .single();
+
+          if (insertOccupationError) throw insertOccupationError;
+          occupationId = newOccupation.occupation_id;
+        }
+      }
+
+      // Validate required IDs before insert
+      if (!emailId) {
+        throw new Error('Failed to create email address');
+      }
+      if (!collegeId) {
+        throw new Error('Failed to create or find college');
+      }
+      if (!programId) {
+        throw new Error('Failed to create or find program');
+      }
+
+      // Build payload - alumni_id will be auto-generated by database
+      const alumniPayload: any = {};
+      
+      alumniPayload.f_name = formData.firstName.trim();
+      alumniPayload.l_name = formData.lastName.trim();
+      alumniPayload.email_id = emailId;
+      alumniPayload.college_id = collegeId;
+      alumniPayload.program_id = programId;
+      alumniPayload.is_active = true;
+      
+      // Optional fields - only add if they have values
+      if (formData.contactNumber?.trim()) {
+        alumniPayload.contact_number = formData.contactNumber.trim();
+      }
+      if (formData.dateGraduated) {
+        alumniPayload.date_graduated = formData.dateGraduated;
+      }
+      if (companyId) {
+        alumniPayload.company_id = companyId;
+      }
+      if (occupationId) {
+        alumniPayload.occupation_id = occupationId;
+      }
+
+      console.log('Inserting alumni with payload:', alumniPayload);
+
+      const { error: insertError } = await supabase
+        .from('alumni')
+        .insert([alumniPayload]);
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
+
+      toast.success('Form submitted successfully!');
       setIsSubmitted(true);
       
       // Reset form after 5 seconds
       setTimeout(() => {
         setIsSubmitted(false);
-        setFormData({
-          firstName: '',
-          lastName: '',
-          email: '',
-          contactNumber: '',
-          college: '',
-          program: '',
-          dateGraduated: '',
-          occupation: '',
-          company: '',
-        });
+        handleReset();
       }, 5000);
+    } catch (error: any) {
+      console.error('Error submitting form:', error);
+      toast.error('Submission failed', {
+        description: error.message || 'Unable to submit form. Please try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -165,9 +369,10 @@ export function AlumniForm() {
                       value={formData.firstName}
                       onChange={handleInputChange}
                       placeholder="Juan"
+                      disabled={isSubmitting}
                       className={`w-full px-4 py-3 border ${
                         errors.firstName ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors`}
+                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed`}
                     />
                     {errors.firstName && (
                       <p className="text-red-500 text-sm mt-1">{errors.firstName}</p>
@@ -184,9 +389,10 @@ export function AlumniForm() {
                       value={formData.lastName}
                       onChange={handleInputChange}
                       placeholder="Dela Cruz"
+                      disabled={isSubmitting}
                       className={`w-full px-4 py-3 border ${
                         errors.lastName ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors`}
+                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed`}
                     />
                     {errors.lastName && (
                       <p className="text-red-500 text-sm mt-1">{errors.lastName}</p>
@@ -215,9 +421,10 @@ export function AlumniForm() {
                       value={formData.email}
                       onChange={handleInputChange}
                       placeholder="juan.delacruz@example.com"
+                      disabled={isSubmitting}
                       className={`w-full px-4 py-3 border ${
                         errors.email ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors`}
+                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed`}
                     />
                     {errors.email && (
                       <p className="text-red-500 text-sm mt-1">{errors.email}</p>
@@ -236,7 +443,8 @@ export function AlumniForm() {
                         value={formData.contactNumber}
                         onChange={handleInputChange}
                         placeholder="+63 912 345 6789"
-                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors"
+                        disabled={isSubmitting}
+                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -261,9 +469,10 @@ export function AlumniForm() {
                       name="college"
                       value={formData.college}
                       onChange={handleInputChange}
+                      disabled={isSubmitting}
                       className={`w-full px-4 py-3 border ${
                         errors.college ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white transition-colors`}
+                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed`}
                     >
                       <option value="">Select College</option>
                       <option value="Business">College of Business</option>
@@ -290,9 +499,10 @@ export function AlumniForm() {
                       value={formData.program}
                       onChange={handleInputChange}
                       placeholder="e.g., Computer Science, Marketing, Civil Engineering"
+                      disabled={isSubmitting}
                       className={`w-full px-4 py-3 border ${
                         errors.program ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors`}
+                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed`}
                     />
                     {errors.program && (
                       <p className="text-red-500 text-sm mt-1">{errors.program}</p>
@@ -310,7 +520,8 @@ export function AlumniForm() {
                         name="dateGraduated"
                         value={formData.dateGraduated}
                         onChange={handleInputChange}
-                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors"
+                        disabled={isSubmitting}
+                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -338,7 +549,8 @@ export function AlumniForm() {
                       value={formData.occupation}
                       onChange={handleInputChange}
                       placeholder="e.g., Software Engineer, Marketing Manager, Teacher"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -354,7 +566,8 @@ export function AlumniForm() {
                         value={formData.company}
                         onChange={handleInputChange}
                         placeholder="e.g., ABC Corporation, XYZ Inc."
-                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors"
+                        disabled={isSubmitting}
+                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -391,10 +604,20 @@ export function AlumniForm() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-6 py-4 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors font-medium flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20"
+                  disabled={isSubmitting}
+                  className="flex-1 px-6 py-4 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors font-medium flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-5 h-5" />
-                  Submit Information
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Submit Information
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { FileText, User, Mail, GraduationCap, Briefcase, Calendar, Check } from 'lucide-react';
+import { FileText, User, Mail, GraduationCap, Briefcase, Calendar, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabaseClient';
 
 export function FormPreview() {
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -23,11 +25,243 @@ export function FormPreview() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePreviewSubmit = (e: React.FormEvent) => {
+  const handlePreviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Form submitted successfully!', {
-      description: 'This is a preview - no data was actually submitted.',
-    });
+    
+    // Validate required fields
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim() || !formData.college || !formData.program.trim()) {
+      toast.error('Please fill in all required fields', {
+        description: 'First Name, Last Name, Email, College, and Program are required.',
+      });
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Invalid email address', {
+        description: 'Please enter a valid email address.',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Check if email already exists in email_address table
+      const { data: existingEmail, error: emailCheckError } = await supabase
+        .from('email_address')
+        .select('email_id, email')
+        .eq('email', formData.email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (emailCheckError && emailCheckError.code !== 'PGRST116') {
+        throw emailCheckError;
+      }
+
+      let emailId: number | null = null;
+
+      if (existingEmail) {
+        // Email already exists, check if it's linked to an alumni
+        const { data: existingAlumni, error: alumniCheckError } = await supabase
+          .from('alumni')
+          .select('alumni_id')
+          .eq('email_id', existingEmail.email_id)
+          .maybeSingle();
+
+        if (alumniCheckError && alumniCheckError.code !== 'PGRST116') {
+          throw alumniCheckError;
+        }
+
+        if (existingAlumni) {
+          toast.error('Email already registered', {
+            description: 'This email address is already in our alumni database.',
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        emailId = existingEmail.email_id;
+      } else {
+        // Create new email address entry
+        const { data: newEmail, error: insertEmailError } = await supabase
+          .from('email_address')
+          .insert({ email: formData.email.toLowerCase().trim(), status: false })
+          .select('email_id')
+          .single();
+
+        if (insertEmailError) throw insertEmailError;
+        emailId = newEmail.email_id;
+      }
+
+      // Get or create college
+      let collegeId: number | null = null;
+      if (formData.college) {
+        const { data: collegeData, error: collegeError } = await supabase
+          .from('colleges')
+          .select('college_id')
+          .eq('college_name', formData.college)
+          .maybeSingle();
+
+        if (collegeError && collegeError.code !== 'PGRST116') {
+          throw collegeError;
+        }
+
+        if (collegeData) {
+          collegeId = collegeData.college_id;
+        } else {
+          const { data: newCollege, error: insertCollegeError } = await supabase
+            .from('colleges')
+            .insert({ college_name: formData.college })
+            .select('college_id')
+            .single();
+
+          if (insertCollegeError) throw insertCollegeError;
+          collegeId = newCollege.college_id;
+        }
+      }
+
+      // Get or create program
+      let programId: number | null = null;
+      if (formData.program) {
+        const { data: programData, error: programError } = await supabase
+          .from('programs')
+          .select('program_id')
+          .eq('program_name', formData.program)
+          .maybeSingle();
+
+        if (programError && programError.code !== 'PGRST116') {
+          throw programError;
+        }
+
+        if (programData) {
+          programId = programData.program_id;
+        } else {
+          const { data: newProgram, error: insertProgramError } = await supabase
+            .from('programs')
+            .insert({ program_name: formData.program })
+            .select('program_id')
+            .single();
+
+          if (insertProgramError) throw insertProgramError;
+          programId = newProgram.program_id;
+        }
+      }
+
+      // Get or create company (if provided)
+      let companyId: number | null = null;
+      if (formData.company.trim()) {
+        const { data: companyData, error: companyError } = await supabase
+          .from('companies')
+          .select('company_id')
+          .eq('company_name', formData.company.trim())
+          .maybeSingle();
+
+        if (companyError && companyError.code !== 'PGRST116') {
+          throw companyError;
+        }
+
+        if (companyData) {
+          companyId = companyData.company_id;
+        } else {
+          const { data: newCompany, error: insertCompanyError } = await supabase
+            .from('companies')
+            .insert({ company_name: formData.company.trim() })
+            .select('company_id')
+            .single();
+
+          if (insertCompanyError) throw insertCompanyError;
+          companyId = newCompany.company_id;
+        }
+      }
+
+      // Get or create occupation (if provided)
+      let occupationId: number | null = null;
+      if (formData.occupation.trim()) {
+        const { data: occupationData, error: occupationError } = await supabase
+          .from('occupations')
+          .select('occupation_id')
+          .eq('occupation_title', formData.occupation.trim())
+          .maybeSingle();
+
+        if (occupationError && occupationError.code !== 'PGRST116') {
+          throw occupationError;
+        }
+
+        if (occupationData) {
+          occupationId = occupationData.occupation_id;
+        } else {
+          const { data: newOccupation, error: insertOccupationError } = await supabase
+            .from('occupations')
+            .insert({ occupation_title: formData.occupation.trim() })
+            .select('occupation_id')
+            .single();
+
+          if (insertOccupationError) throw insertOccupationError;
+          occupationId = newOccupation.occupation_id;
+        }
+      }
+
+      // Validate required IDs before insert
+      if (!emailId) {
+        throw new Error('Failed to create email address');
+      }
+      if (!collegeId) {
+        throw new Error('Failed to create or find college');
+      }
+      if (!programId) {
+        throw new Error('Failed to create or find program');
+      }
+
+      // Build payload - alumni_id will be auto-generated by database
+      const alumniPayload: any = {};
+      
+      alumniPayload.f_name = formData.firstName.trim();
+      alumniPayload.l_name = formData.lastName.trim();
+      alumniPayload.email_id = emailId;
+      alumniPayload.college_id = collegeId;
+      alumniPayload.program_id = programId;
+      alumniPayload.is_active = true;
+      
+      // Optional fields - only add if they have values
+      if (formData.contactNumber?.trim()) {
+        alumniPayload.contact_number = formData.contactNumber.trim();
+      }
+      if (formData.dateGraduated) {
+        alumniPayload.date_graduated = formData.dateGraduated;
+      }
+      if (companyId) {
+        alumniPayload.company_id = companyId;
+      }
+      if (occupationId) {
+        alumniPayload.occupation_id = occupationId;
+      }
+
+      console.log('Inserting alumni with payload:', alumniPayload);
+
+      const { error: insertError } = await supabase
+        .from('alumni')
+        .insert([alumniPayload]);
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
+
+      toast.success('Form submitted successfully!', {
+        description: 'Your information has been added to the alumni database.',
+      });
+
+      // Reset form
+      handleReset();
+    } catch (error: any) {
+      console.error('Error submitting form:', error);
+      toast.error('Submission failed', {
+        description: error.message || 'Unable to submit form. Please try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
@@ -50,7 +284,10 @@ export function FormPreview() {
       <div>
         <h1 className="text-3xl mb-2">Alumni Form Preview</h1>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p className="text-gray-600">Preview how the form will appear to alumni when filling out their information</p>
+          <div>
+            <p className="text-gray-600">Preview and test the alumni information form</p>
+            <p className="text-sm text-green-600 font-medium mt-1">✓ Form is live - submissions will be saved to the alumni database</p>
+          </div>
           <button
             onClick={() => window.open('/alumni-form', '_blank')}
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
@@ -137,7 +374,9 @@ export function FormPreview() {
                       value={formData.firstName}
                       onChange={handleInputChange}
                       placeholder="Juan"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -151,7 +390,9 @@ export function FormPreview() {
                       value={formData.lastName}
                       onChange={handleInputChange}
                       placeholder="Dela Cruz"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -175,7 +416,9 @@ export function FormPreview() {
                       value={formData.email}
                       onChange={handleInputChange}
                       placeholder="juan.delacruz@example.com"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -189,7 +432,8 @@ export function FormPreview() {
                       value={formData.contactNumber}
                       onChange={handleInputChange}
                       placeholder="+63 912 345 6789"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -211,7 +455,9 @@ export function FormPreview() {
                       name="college"
                       value={formData.college}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Select College</option>
                       <option value="Business">Business</option>
@@ -233,7 +479,9 @@ export function FormPreview() {
                       value={formData.program}
                       onChange={handleInputChange}
                       placeholder="e.g., Computer Science, Marketing, Civil Engineering"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -246,7 +494,8 @@ export function FormPreview() {
                       name="dateGraduated"
                       value={formData.dateGraduated}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -270,7 +519,8 @@ export function FormPreview() {
                       value={formData.occupation}
                       onChange={handleInputChange}
                       placeholder="e.g., Software Engineer, Marketing Manager"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -284,7 +534,8 @@ export function FormPreview() {
                       value={formData.company}
                       onChange={handleInputChange}
                       placeholder="e.g., ABC Corporation"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -309,10 +560,20 @@ export function FormPreview() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-6 py-3 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors font-medium flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="flex-1 px-6 py-3 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-4 h-4" />
-                  Submit Information
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Submit Information
+                    </>
+                  )}
                 </button>
               </div>
             </div>

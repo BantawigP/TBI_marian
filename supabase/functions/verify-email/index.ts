@@ -1,110 +1,80 @@
-// @ts-nocheck
+// Edge Function: verify-email
+// Validates a token, marks contact as verified, and deletes the token.
+import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
-
-type VerifyEmailRequest = {
-  token: string;
-};
-
-const getEnv = () => ({
-  SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
-  SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-});
-
-const corsHeaders: Record<string, string> = {
+const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Max-Age": "86400",
 };
 
-const sha256Hex = async (value: string) => {
-  const data = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Missing required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+
+const hashToken = async (token: string) => {
+  const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return new Response("ok", { headers: { ...corsHeaders } });
   }
 
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
-  }
-
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getEnv();
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("Missing required env", { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_ROLE_KEY });
-    return new Response("Server not configured", { status: 500, headers: corsHeaders });
-  }
-
-  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
-
-  let body: VerifyEmailRequest;
   try {
-    body = await req.json();
-  } catch {
-    return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
+    const body = await req.json();
+    const token = body?.token as string | undefined;
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Missing token" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const tokenHash = await hashToken(token);
+    const nowIso = new Date().toISOString();
+
+    const { data: record, error: lookupError } = await supabase
+      .from("email_verification_tokens")
+      .select("email, expires_at")
+      .eq("token_hash", tokenHash)
+      .gt("expires_at", nowIso)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("Lookup error", lookupError);
+      return new Response(JSON.stringify({ error: "Lookup failed" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (!record) {
+      return new Response(JSON.stringify({ error: "Invalid or expired token" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Mark the email as verified in email_address (the app maps this boolean to Verified/Unverified).
+    const { error: updateError } = await supabase
+      .from("email_address")
+      .upsert({ email: record.email, status: true }, { onConflict: "email" });
+
+    if (updateError) {
+      console.error("Update error", updateError);
+      return new Response(JSON.stringify({ error: "Failed to mark verified" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    await supabase.from("email_verification_tokens").delete().eq("token_hash", tokenHash);
+
+    return new Response(JSON.stringify({ email: record.email }), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return new Response(JSON.stringify({ error: "Unexpected error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-
-  const token = (body.token ?? "").trim();
-  if (!token) return new Response("Missing 'token'", { status: 400, headers: corsHeaders });
-
-  const tokenHash = await sha256Hex(token);
-
-  const { data: tokenRow, error: tokenSelectError } = await supabaseAdmin
-    .from("email_verification_tokens")
-    .select("id,email,expires_at,used_at")
-    .eq("token_hash", tokenHash)
-    .maybeSingle();
-
-  if (tokenSelectError) {
-    console.error("Token lookup failed", tokenSelectError);
-    return new Response("Verification failed", { status: 500, headers: corsHeaders });
-  }
-
-  if (!tokenRow) {
-    return new Response("Invalid or expired token", { status: 400, headers: corsHeaders });
-  }
-
-  if (tokenRow.used_at) {
-    return new Response("Token already used", { status: 400, headers: corsHeaders });
-  }
-
-  const expiresAt = new Date(tokenRow.expires_at);
-  if (Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
-    return new Response("Invalid or expired token", { status: 400, headers: corsHeaders });
-  }
-
-  const email = (tokenRow.email as string).trim().toLowerCase();
-
-  // Mark email as verified. Assumes `email_address.email` has a unique constraint.
-  const { error: emailUpsertError } = await supabaseAdmin
-    .from("email_address")
-    .upsert({ email, status: true }, { onConflict: "email" });
-
-  if (emailUpsertError) {
-    console.error("Email update failed", emailUpsertError);
-    return new Response("Failed to update email status", { status: 500, headers: corsHeaders });
-  }
-
-  const { error: markUsedError } = await supabaseAdmin
-    .from("email_verification_tokens")
-    .update({ used_at: new Date().toISOString() })
-    .eq("id", tokenRow.id);
-
-  if (markUsedError) {
-    console.error("Failed to mark token used", markUsedError);
-    return new Response("Failed to finalize verification", { status: 500, headers: corsHeaders });
-  }
-
-  return new Response(JSON.stringify({ ok: true, email }), {
-    headers: { "Content-Type": "application/json", ...corsHeaders },
-  });
 });

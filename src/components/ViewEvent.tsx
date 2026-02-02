@@ -15,6 +15,11 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const isPastEvent = new Date(event.date) < new Date();
+  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const mapLocation = encodeURIComponent(event.location);
+  const mapUrl = mapsApiKey
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=${mapLocation}&zoom=15&size=480x270&scale=2&maptype=roadmap&markers=color:red%7C${mapLocation}&key=${mapsApiKey}`
+    : null;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -94,43 +99,67 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* Event Info */}
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 mb-4">
-                {event.title}
-              </h1>
-              <p className="text-gray-600 mb-6">{event.description}</p>
+          <div className="max-w-5xl mx-auto space-y-6">
+            {/* Event Info + Map */}
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+                  {event.title}
+                </h1>
+                <p className="text-gray-600 mb-6">{event.description}</p>
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-gray-700">
-                  <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-[#FF2B5E]" />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-[#FF2B5E]" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Date</p>
+                      <p className="text-sm font-medium">{formatDate(event.date)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Date</p>
-                    <p className="text-sm font-medium">{formatDate(event.date)}</p>
+
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-[#FF2B5E]" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Time</p>
+                      <p className="text-sm font-medium">{formatTime(event.time)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                      <MapPin className="w-5 h-5 text-[#FF2B5E]" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Location</p>
+                      <p className="text-sm font-medium">{event.location}</p>
+                    </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex items-center gap-3 text-gray-700">
-                  <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-[#FF2B5E]" />
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[220px]">
+                {mapUrl ? (
+                  <img
+                    src={mapUrl}
+                    alt={`Map showing ${event.location}`}
+                    className="w-full h-full object-cover min-h-[220px]"
+                  />
+                ) : (
+                  <div className="p-6 bg-gray-50 h-full min-h-[220px] flex items-center justify-center text-center text-gray-600">
+                    <div>
+                      <p className="font-semibold text-gray-800">Map preview unavailable</p>
+                      <p className="text-sm mt-2 text-gray-600">
+                        Add VITE_GOOGLE_MAPS_API_KEY to show a Google static map for this location.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Time</p>
-                    <p className="text-sm font-medium">{formatTime(event.time)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-gray-700">
-                  <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-[#FF2B5E]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Location</p>
-                    <p className="text-sm font-medium">{event.location}</p>
-                  </div>
+                )}
+                <div className="px-4 py-3 border-t border-gray-200 bg-white text-xs text-gray-500">
+                  Location preview for {event.location}
                 </div>
               </div>
             </div>

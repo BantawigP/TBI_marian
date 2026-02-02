@@ -18,6 +18,7 @@ import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event, TeamMember } from './types';
+import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
 import { updateEvent, deleteEventPermanently } from './lib/eventService';
 import {
@@ -899,6 +900,10 @@ export default function App() {
   };
 
   const handleUpdateContactStatus = async (updatedContact: Contact) => {
+    const previous = contacts.find((c) => c.id === updatedContact.id);
+    const becameUnverified =
+      updatedContact.status === 'Unverified' && previous?.status !== 'Unverified';
+
     // Update contact status locally
     setContacts((prev) =>
       prev.map((c) => (c.id === updatedContact.id ? updatedContact : c))
@@ -911,6 +916,21 @@ export default function App() {
     try {
       if (updatedContact.email) {
         await ensureEmailId(updatedContact.email, updatedContact.status);
+
+        if (becameUnverified) {
+          try {
+            await sendVerificationEmail({
+              to: updatedContact.email,
+              firstName: updatedContact.firstName,
+              brandName: 'Marian Alumni Network',
+            });
+            console.log('✅ Verification email sent for unverified contact');
+          } catch (emailError) {
+            console.error('❌ Status updated but failed to send verification email:', emailError);
+            setSyncError('Contact status updated, but sending verification email failed.');
+          }
+        }
+
         console.log('✅ Contact status updated in email_address table');
       }
     } catch (error) {
@@ -936,6 +956,25 @@ export default function App() {
     try {
       const savedContact = await persistContactToSupabase(normalizedContact);
       console.log('✅ Contact saved with alumniId:', savedContact.alumniId);
+
+      const shouldSendVerification =
+        savedContact.status === 'Unverified' &&
+        Boolean(savedContact.email?.trim()) &&
+        (!editingId || editingContact?.status !== 'Unverified');
+
+      if (shouldSendVerification && savedContact.email) {
+        try {
+          await sendVerificationEmail({
+            to: savedContact.email,
+            firstName: savedContact.firstName,
+            brandName: 'Marian Alumni Network',
+          });
+          console.log('✅ Verification email sent for newly unverified contact');
+        } catch (emailError) {
+          console.error('❌ Contact saved but failed to send verification email:', emailError);
+          setSyncError('Contact saved, but sending verification email failed.');
+        }
+      }
 
       setContacts((prev) => {
         if (editingId) {

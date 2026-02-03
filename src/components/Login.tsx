@@ -12,13 +12,32 @@ export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simple validation - in production you'd verify credentials
-    if (email && password) {
-      onLogin();
+    setError(null);
+    setEmailLoading(true);
+
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message ?? 'Sign in failed.');
+        return;
+      }
+
+      if (data.session) {
+        onLogin();
+      } else {
+        setError('Sign in did not return a session. Please try again.');
+      }
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -198,9 +217,17 @@ export function Login({ onLogin }: LoginProps) {
               {/* Login Button */}
               <button
                 type="submit"
+                disabled={emailLoading}
                 className="w-full bg-gradient-to-r from-[#FF2B5E] to-[#FF4570] text-white py-3 rounded-lg font-medium hover:from-[#E6275A] hover:to-[#E63E66] transition-all shadow-lg shadow-[#FF2B5E]/25 hover:shadow-xl hover:shadow-[#FF2B5E]/30"
               >
-                Sign In
+                {emailLoading ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Signing in...
+                  </span>
+                ) : (
+                  'Sign In'
+                )}
               </button>
 
               <div className="relative">

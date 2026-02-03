@@ -295,7 +295,7 @@ export async function grantAccess(
 ): Promise<{ success: boolean; message: string }> {
   try {
     // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
       console.error('Session error:', sessionError);
@@ -307,6 +307,13 @@ export async function grantAccess(
       throw new Error('You must be logged in to grant access. Please log in again.');
     }
 
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      console.warn('Session refresh failed:', refreshError);
+    } else if (refreshData.session) {
+      session = refreshData.session;
+    }
+
     console.log('✓ Session found, granting access...');
 
     // Call the grant-access Edge Function
@@ -316,6 +323,7 @@ export async function grantAccess(
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -326,10 +334,13 @@ export async function grantAccess(
       }
     );
 
-    const result = await response.json();
+    const rawText = await response.text();
+    const result = rawText ? JSON.parse(rawText) : {};
 
     if (!response.ok) {
-      throw new Error(result.error || 'Failed to grant access');
+      const detail = result.detail ? ` (${result.detail})` : '';
+      const errorMessage = (result.error || result.message || rawText || 'Failed to grant access') + detail;
+      throw new Error(errorMessage);
     }
 
     return {
@@ -349,10 +360,17 @@ export async function grantAccess(
 export async function claimAccess(token: string): Promise<{ success: boolean; message: string }> {
   try {
     // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
       throw new Error('You must be signed in to claim access');
+    }
+
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      console.warn('Session refresh failed:', refreshError);
+    } else if (refreshData.session) {
+      session = refreshData.session;
     }
 
     // Call the claim-access Edge Function
@@ -362,16 +380,19 @@ export async function claimAccess(token: string): Promise<{ success: boolean; me
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ token }),
       }
     );
 
-    const result = await response.json();
+    const rawText = await response.text();
+    const result = rawText ? JSON.parse(rawText) : {};
 
     if (!response.ok) {
-      throw new Error(result.error || 'Failed to claim access');
+      const errorMessage = result.error || result.message || rawText || 'Failed to claim access';
+      throw new Error(errorMessage);
     }
 
     return {

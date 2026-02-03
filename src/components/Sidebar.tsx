@@ -52,6 +52,16 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
         </ul>
       </nav>
 
+      {/* User Profile Preview */}
+      <div className="p-4">
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+          <div className="flex flex-col gap-1">
+            <p className="font-semibold text-white truncate">Admin User</p>
+            <p className="text-xs text-white/70 truncate">admin@mariantbi.edu</p>
+          </div>
+        </div>
+      </div>
+
       {/* Logout */}
       <div className="p-4 border-t border-white/10">
         <button

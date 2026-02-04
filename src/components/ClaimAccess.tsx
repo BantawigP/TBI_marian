@@ -59,14 +59,16 @@ export function ClaimAccess({ onSuccess }: ClaimAccessProps) {
       setClaiming(true);
       setError(null);
       
-      await claimAccess(token);
+      const result = await claimAccess(token);
       
       setSuccess(true);
       
-      // Redirect to dashboard after 2 seconds
+      // Show success message for 1.5 seconds, then redirect
       setTimeout(() => {
+        // Clear the token from URL
+        window.history.replaceState({}, document.title, window.location.pathname);
         onSuccess();
-      }, 2000);
+      }, 1500);
     } catch (err) {
       console.error('Error claiming access:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to claim access';
@@ -94,9 +96,9 @@ export function ClaimAccess({ onSuccess }: ClaimAccessProps) {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Granted!</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to MARIAN TBI Connect!</h2>
           <p className="text-gray-600 mb-4">
-            Your account has been successfully activated. Redirecting to dashboard...
+            Your access has been successfully activated. You can now access the system.
           </p>
           <Loader2 className="w-6 h-6 text-[#FF2B5E] animate-spin mx-auto" />
         </div>

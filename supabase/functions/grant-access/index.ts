@@ -241,8 +241,8 @@ serve(async (req) => {
   }
 
   const token = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
-  const claimLink = `${APP_URL}/?token=${token}`;
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(); // 7 days
+  const claimLink = `${APP_URL}/?claim=${token}`;
 
   const { error: inviteError } = await supabase.from("access_invites").insert({
     team_member_id: teamMemberId,
@@ -276,7 +276,7 @@ serve(async (req) => {
     type: "magiclink",
     email,
     options: {
-      redirectTo: claimLink,
+      redirectTo: `${APP_URL}`,
     },
   });
 

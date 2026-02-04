@@ -206,47 +206,58 @@ export async function createTeamMember(member: Omit<TeamMember, 'id'>): Promise<
  * Update a team member
  */
 export async function updateTeamMember(id: string, updates: Partial<TeamMember>): Promise<TeamMember> {
-  const updateData: any = {};
+  try {
+    const updateData: any = {};
 
-  if (updates.firstName !== undefined) updateData.first_name = updates.firstName;
-  if (updates.lastName !== undefined) updateData.last_name = updates.lastName;
-  if (updates.email !== undefined) updateData.email = updates.email;
-  if (updates.phone !== undefined) updateData.phone = updates.phone || null;
+    if (updates.firstName !== undefined) updateData.first_name = updates.firstName;
+    if (updates.lastName !== undefined) updateData.last_name = updates.lastName;
+    if (updates.email !== undefined) updateData.email = updates.email;
+    if (updates.phone !== undefined) updateData.phone = updates.phone || null;
 
-  if (updates.role !== undefined) {
-    updateData.role_id = await getRoleIdByName(updates.role);
-  }
-
-  if (updates.department !== undefined) {
-    updateData.department_id = await ensureDepartmentId(updates.department);
-  }
-
-  if (updates.joinedDate !== undefined) {
-    try {
-      const date = new Date(updates.joinedDate);
-      updateData.joined_date = date.toISOString().split('T')[0];
-    } catch {
-      // Keep existing date if parse fails
+    if (updates.role !== undefined) {
+      updateData.role_id = await getRoleIdByName(updates.role);
     }
+
+    if (updates.department !== undefined) {
+      updateData.department_id = await ensureDepartmentId(updates.department);
+    }
+
+    if (updates.joinedDate !== undefined) {
+      try {
+        const date = new Date(updates.joinedDate);
+        updateData.joined_date = date.toISOString().split('T')[0];
+      } catch {
+        // Keep existing date if parse fails
+      }
+    }
+
+    if (updates.avatarColor !== undefined) {
+      updateData.avatar_color = updates.avatarColor;
+    }
+
+    console.log('Updating team member:', id, 'with data:', updateData);
+
+    const { data, error } = await supabase
+      .from('teams')
+      .update(updateData)
+      .eq('id', parseInt(id))
+      .select(`
+        *,
+        roles(id, role_name),
+        departments(id, department_name)
+      `)
+      .single();
+
+    if (error) {
+      console.error('Error updating team member:', error);
+      throw new Error(`Failed to update team member: ${error.message}`);
+    }
+
+    return rowToTeamMember(data);
+  } catch (err) {
+    console.error('Update team member failed:', err);
+    throw err;
   }
-
-  if (updates.avatarColor !== undefined) {
-    updateData.avatar_color = updates.avatarColor;
-  }
-
-  const { data, error } = await supabase
-    .from('teams')
-    .update(updateData)
-    .eq('id', parseInt(id))
-    .select(`
-      *,
-      roles(id, role_name),
-      departments(id, department_name)
-    `)
-    .single();
-
-  if (error) throw error;
-  return rowToTeamMember(data);
 }
 
 /**

@@ -59,8 +59,8 @@ export function ClaimAccess({ onSuccess }: ClaimAccessProps) {
       setClaiming(true);
       setError(null);
       
-      const result = await claimAccess(token);
-      
+      await claimAccess(token);
+
       setSuccess(true);
       
       // Show success message for 1.5 seconds, then redirect

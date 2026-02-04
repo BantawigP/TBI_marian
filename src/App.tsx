@@ -17,9 +17,10 @@ import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
-import type { Contact, ContactStatus, Event, TeamMember } from './types';
+import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
+import { sendEventInvites } from './lib/eventInviteService';
 import { updateEvent, deleteEventPermanently } from './lib/eventService';
 import {
   fetchArchivedTeamMembers,
@@ -193,7 +194,8 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
   const attendees = (row.event_participants ?? [])
     .map((participant: any) => {
       const alumni = participant.alumni ?? participant.alumni_id ?? participant.alumniRow;
-      return alumni ? mapContactRowToContact(alumni) : null;
+      const rsvpStatus = (participant.rsvp_status || participant.rsvpStatus || 'pending') as RsvpStatus;
+      return alumni ? { ...mapContactRowToContact(alumni), rsvpStatus } : null;
     })
     .filter(Boolean) as Contact[];
 
@@ -223,11 +225,19 @@ const CONTACT_SELECT_WITH_ADDRESS = `${CONTACT_SELECT_BASE},alumniaddress_id`;
 
 let supportsAlumniAddressColumn = true;
 let loggedMissingAlumniAddressColumn = false;
+let supportsEventRsvpStatus = true;
+let loggedMissingEventRsvpStatus = false;
 
 const noteMissingAlumniAddressColumn = () => {
   if (loggedMissingAlumniAddressColumn) return;
   loggedMissingAlumniAddressColumn = true;
   console.warn('Supabase: alumniaddress_id column missing, continuing without address linkage.');
+};
+
+const noteMissingEventRsvpStatus = () => {
+  if (loggedMissingEventRsvpStatus) return;
+  loggedMissingEventRsvpStatus = true;
+  console.warn('Supabase: event_participants.rsvp_status column missing, continuing without RSVP status.');
 };
 
 const getContactSelect = () =>
@@ -464,19 +474,32 @@ export default function App() {
     return hydrateContactsWithAddresses(contacts);
   };
 
-  const eventAlumniFields = () =>
-    supportsAlumniAddressColumn
+  function eventAlumniFields() {
+    return supportsAlumniAddressColumn
       ? 'alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)'
       : 'alumni_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
+  }
+
+  function eventParticipantsSelect() {
+    return supportsEventRsvpStatus
+      ? `event_participants(rsvp_status,alumni:alumni_id(${eventAlumniFields()}))`
+      : `event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+  }
 
   const fetchEventsFromSupabase = async (): Promise<Event[]> => {
-    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
     let { data, error } = await supabase.from('events').select(selectClause).or('is_active.eq.true,is_active.is.null');
 
-    if (error && error.code === '42703') {
-      noteMissingAlumniAddressColumn();
-      supportsAlumniAddressColumn = false;
-      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status'))) {
+      if (error.message?.includes('rsvp_status')) {
+        noteMissingEventRsvpStatus();
+        supportsEventRsvpStatus = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
+
+      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
       ({ data, error } = await supabase.from('events').select(fallbackSelect).or('is_active.eq.true,is_active.is.null'));
     }
 
@@ -488,13 +511,19 @@ export default function App() {
   };
 
   const fetchArchivedEventsFromSupabase = async (): Promise<Event[]> => {
-    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
     let { data, error } = await supabase.from('events').select(selectClause).eq('is_active', false);
 
-    if (error && error.code === '42703') {
-      noteMissingAlumniAddressColumn();
-      supportsAlumniAddressColumn = false;
-      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status'))) {
+      if (error.message?.includes('rsvp_status')) {
+        noteMissingEventRsvpStatus();
+        supportsEventRsvpStatus = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
+
+      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
       ({ data, error } = await supabase.from('events').select(fallbackSelect).eq('is_active', false));
     }
 
@@ -604,6 +633,16 @@ export default function App() {
     return saved;
   };
 
+  const triggerEventInvites = async (event: Event, attendees: Contact[], context: string) => {
+    if (!attendees.length) return;
+    try {
+      await sendEventInvites(event, attendees);
+    } catch (err) {
+      console.error(`❌ Failed to send invites (${context})`, err);
+      setSyncError('Event saved, but sending invitations failed.');
+    }
+  };
+
   const persistEventAttendees = async (eventId: string, attendees: Contact[]) => {
     const numericEventId = numberOrNull(eventId);
     console.log('📝 Adding attendees to event:', { 
@@ -625,10 +664,10 @@ export default function App() {
         if (!alumniId) {
           console.warn('⚠️ Attendee has no valid alumniId:', { name: attendee.name, id: attendee.id, alumniId: attendee.alumniId });
         }
-        return alumniId;
+        return alumniId ? { alumniId, rsvpStatus: attendee.rsvpStatus ?? 'pending' as RsvpStatus } : null;
       })
-      .filter((id): id is number => Boolean(id))
-      .map((alumniId) => ({ event_id: numericEventId, alumni_id: alumniId }));
+      .filter((row): row is { alumniId: number; rsvpStatus: RsvpStatus } => row !== null)
+      .map(({ alumniId, rsvpStatus }) => ({ event_id: numericEventId, alumni_id: alumniId, rsvp_status: rsvpStatus }));
 
     console.log('📊 Rows to insert:', rows);
 
@@ -642,7 +681,15 @@ export default function App() {
       .from('event_participants')
       .insert(rows);
 
-    if (error) {
+    if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+      console.warn('event_participants.rsvp_status missing; inserting without status');
+      const fallbackRows = rows.map(({ event_id, alumni_id }) => ({ event_id, alumni_id }));
+      const { error: fallbackError } = await supabase.from('event_participants').insert(fallbackRows);
+      if (fallbackError) {
+        console.error('❌ Failed to persist attendees (fallback):', fallbackError);
+        throw fallbackError;
+      }
+    } else if (error) {
       console.error('❌ Failed to persist attendees:', error);
       throw error;
     }
@@ -842,6 +889,47 @@ export default function App() {
 
     return () => {
       isMounted = false;
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const channel = supabase
+      .channel('event-participants-rsvp')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_participants' },
+        (payload) => {
+          const row: any = payload.new ?? payload.record;
+          if (!row) return;
+
+          const eventId = row.event_id;
+          const alumniId = row.alumni_id;
+          const rsvpStatus = row.rsvp_status as RsvpStatus | undefined;
+
+          if (!eventId || !alumniId) return;
+
+          const updateList = (list: Event[]) =>
+            list.map((evt) => {
+              if (evt.id !== String(eventId)) return evt;
+              const attendees = evt.attendees.map((attendee) => {
+                const matchId = attendee.alumniId ?? numberOrNull(attendee.id);
+                if (matchId !== numberOrNull(alumniId)) return attendee;
+                return { ...attendee, rsvpStatus: rsvpStatus ?? attendee.rsvpStatus };
+              });
+              return { ...evt, attendees };
+            });
+
+          setEvents((prev) => updateList(prev));
+          setArchivedEvents((prev) => updateList(prev));
+        }
+      );
+
+    channel.subscribe();
+
+    return () => {
+      channel.unsubscribe();
     };
   }, [isLoggedIn]);
 
@@ -1090,6 +1178,8 @@ export default function App() {
       // Just add it to the local state
       setEvents((prev) => [...prev, event]);
       setShowCreateEvent(false);
+
+      await triggerEventInvites(event, event.attendees, 'create');
     } catch (err) {
       console.error('Failed to add event', err);
       setSyncError('Failed to add event.');
@@ -1139,18 +1229,23 @@ export default function App() {
     setViewingEvent(event);
   };
 
-  const handleAddAttendees = (eventId: string, newAttendees: Contact[]) => {
+  const handleAddAttendees = async (eventId: string, newAttendees: Contact[]) => {
     console.log('🎯 App - handleAddAttendees called:', {
       eventId,
       newAttendeesCount: newAttendees.length,
       newAttendees: newAttendees.map(a => ({ id: a.id, name: a.name, alumniId: a.alumniId }))
     });
-    
+    const normalizedAttendees = newAttendees.map((attendee) => ({
+      ...attendee,
+      rsvpStatus: attendee.rsvpStatus ?? 'pending',
+    }));
+
     const updatedEvents = events.map((event) =>
       event.id === eventId
-        ? { ...event, attendees: [...event.attendees, ...newAttendees] }
+        ? { ...event, attendees: [...event.attendees, ...normalizedAttendees] }
         : event
     );
+    const targetEvent = updatedEvents.find((event) => event.id === eventId);
     
     setEvents(updatedEvents);
     
@@ -1162,10 +1257,14 @@ export default function App() {
       }
     }
 
-    persistEventAttendees(eventId, newAttendees).catch((error) => {
+    await persistEventAttendees(eventId, normalizedAttendees).catch((error) => {
       console.error('Supabase: failed to add attendees', error);
       setSyncError('Added attendees locally but failed to sync with Supabase.');
     });
+
+    if (targetEvent) {
+      triggerEventInvites(targetEvent, normalizedAttendees, 'add-attendees');
+    }
   };
 
   const handleRestoreContact = async (contact: Contact) => {

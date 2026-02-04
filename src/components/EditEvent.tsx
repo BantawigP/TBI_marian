@@ -27,7 +27,7 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
   );
 
   const handleAddAttendee = (contact: Contact) => {
-    setSelectedAttendees([...selectedAttendees, contact]);
+    setSelectedAttendees([...selectedAttendees, { ...contact, rsvpStatus: 'pending' }]);
     setSearchQuery('');
   };
 

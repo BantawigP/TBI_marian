@@ -56,9 +56,9 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
     setError(null);
 
     try {
-      const attendees = contactedPeople.filter((c) =>
-        selectedAttendees.includes(c.id)
-      );
+      const attendees = contactedPeople
+        .filter((c) => selectedAttendees.includes(c.id))
+        .map((c) => ({ ...c, rsvpStatus: 'pending' as const }));
 
       console.log('CreateEvent - Selected attendees:', attendees.map(a => ({ 
         id: a.id, 

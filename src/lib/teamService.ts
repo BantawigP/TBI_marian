@@ -383,10 +383,12 @@ export async function claimAccess(token: string): Promise<{ success: boolean; me
     );
 
     const rawText = await response.text();
+    console.log('Claim access response:', response.status, rawText);
     const result = rawText ? JSON.parse(rawText) : {};
 
     if (!response.ok) {
-      const errorMessage = result.error || result.message || rawText || 'Failed to claim access';
+      const detail = result.detail ? ` (${result.detail})` : '';
+      const errorMessage = (result.error || result.message || rawText || 'Failed to claim access') + detail;
       throw new Error(errorMessage);
     }
 

@@ -901,7 +901,7 @@ export default function App() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'event_participants' },
         (payload) => {
-          const row: any = payload.new ?? payload.record;
+          const row: any = payload.new ?? payload.old;
           if (!row) return;
 
           const eventId = row.event_id;

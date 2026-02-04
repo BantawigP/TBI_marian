@@ -53,7 +53,7 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     try {
       setLoading(true);
       setError(null);
-      await createTeamMember({
+      const createdMember = await createTeamMember({
         firstName: newMember.firstName,
         lastName: newMember.lastName,
         name: `${newMember.firstName} ${newMember.lastName}`,
@@ -65,6 +65,7 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
         avatarColor: '#FF2B5E',
       });
       await loadTeamMembers();
+      alert(`Member added successfully: ${createdMember.name}`);
       setShowAddModal(false);
       setNewMember({
         firstName: '',
@@ -124,7 +125,19 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       setLoading(true);
       setError(null);
       const result = await grantAccess(member.id, member.email, member.role);
-      alert(result.message + '\n\nA magic link has been sent to ' + member.email);
+      
+      if (result.warning && result.actionLink) {
+        // Email couldn't be sent due to Resend limitations - show the link
+        const copyLink = confirm(
+          `${result.message}\n\nWould you like to copy the magic link to share manually?`
+        );
+        if (copyLink) {
+          await navigator.clipboard.writeText(result.actionLink);
+          alert('Magic link copied to clipboard!\n\nShare this link with ' + member.email);
+        }
+      } else {
+        alert(result.message + '\n\nA magic link has been sent to ' + member.email);
+      }
       await loadTeamMembers(); // Reload to update has_access status
     } catch (err) {
       console.error('Error granting access:', err);

@@ -1,6 +1,6 @@
 import { X, Calendar, Clock, MapPin, Users, Mail, UserPlus, Archive } from 'lucide-react';
 import { useState } from 'react';
-import type { Contact, Event } from '../types';
+import type { Contact, Event, RsvpStatus } from '../types';
 
 interface ViewEventProps {
   event: Event;
@@ -15,11 +15,6 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const isPastEvent = new Date(event.date) < new Date();
-  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const mapLocation = encodeURIComponent(event.location);
-  const mapUrl = mapsApiKey
-    ? `https://maps.googleapis.com/maps/api/staticmap?center=${mapLocation}&zoom=15&size=480x270&scale=2&maptype=roadmap&markers=color:red%7C${mapLocation}&key=${mapsApiKey}`
-    : null;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -37,6 +32,29 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const renderStatusBadge = (status: RsvpStatus | undefined) => {
+    const normalized = status ?? 'pending';
+    const palette: Record<RsvpStatus, string> = {
+      going: 'bg-green-100 text-green-700 border-green-200',
+      not_going: 'bg-red-100 text-red-700 border-red-200',
+      pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    };
+    const label: Record<RsvpStatus, string> = {
+      going: 'Will participate',
+      not_going: 'Will not participate',
+      pending: 'Pending reply',
+    };
+
+    return (
+      <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${palette[normalized]}`}>
+        <span className={`w-2 h-2 rounded-full ${
+          normalized === 'going' ? 'bg-green-500' : normalized === 'not_going' ? 'bg-red-500' : 'bg-yellow-500'
+        }`} />
+        {label[normalized]}
+      </span>
+    );
   };
 
   // Filter only verified people who are not already attendees
@@ -60,9 +78,9 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
   };
 
   const handleAddAttendees = () => {
-    const newAttendees = contactedPeople.filter((c) =>
-      selectedAttendees.includes(c.id)
-    );
+    const newAttendees = contactedPeople
+      .filter((c) => selectedAttendees.includes(c.id))
+      .map((c) => ({ ...c, rsvpStatus: 'pending' as const }));
     console.log('🎯 ViewEvent - handleAddAttendees called:', {
       selectedIds: selectedAttendees,
       newAttendeesCount: newAttendees.length,
@@ -101,65 +119,41 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-5xl mx-auto space-y-6">
             {/* Event Info + Map */}
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900 mb-4">
-                  {event.title}
-                </h1>
-                <p className="text-gray-600 mb-6">{event.description}</p>
+            <div className="space-y-3">
+              <h1 className="text-2xl font-semibold text-gray-900 mb-2">
+                {event.title}
+              </h1>
+              <p className="text-gray-600 mb-4">{event.description}</p>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 text-gray-700">
-                    <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
-                      <Calendar className="w-5 h-5 text-[#FF2B5E]" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Date</p>
-                      <p className="text-sm font-medium">{formatDate(event.date)}</p>
-                    </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-gray-700">
+                  <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-[#FF2B5E]" />
                   </div>
-
-                  <div className="flex items-center gap-3 text-gray-700">
-                    <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-[#FF2B5E]" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Time</p>
-                      <p className="text-sm font-medium">{formatTime(event.time)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-gray-700">
-                    <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
-                      <MapPin className="w-5 h-5 text-[#FF2B5E]" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Location</p>
-                      <p className="text-sm font-medium">{event.location}</p>
-                    </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Date</p>
+                    <p className="text-sm font-medium">{formatDate(event.date)}</p>
                   </div>
                 </div>
-              </div>
 
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[220px]">
-                {mapUrl ? (
-                  <img
-                    src={mapUrl}
-                    alt={`Map showing ${event.location}`}
-                    className="w-full h-full object-cover min-h-[220px]"
-                  />
-                ) : (
-                  <div className="p-6 bg-gray-50 h-full min-h-[220px] flex items-center justify-center text-center text-gray-600">
-                    <div>
-                      <p className="font-semibold text-gray-800">Map preview unavailable</p>
-                      <p className="text-sm mt-2 text-gray-600">
-                        Add VITE_GOOGLE_MAPS_API_KEY to show a Google static map for this location.
-                      </p>
-                    </div>
+                <div className="flex items-center gap-3 text-gray-700">
+                  <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-[#FF2B5E]" />
                   </div>
-                )}
-                <div className="px-4 py-3 border-t border-gray-200 bg-white text-xs text-gray-500">
-                  Location preview for {event.location}
+                  <div>
+                    <p className="text-xs text-gray-500">Time</p>
+                    <p className="text-sm font-medium">{formatTime(event.time)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-gray-700">
+                  <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-[#FF2B5E]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Location</p>
+                    <p className="text-sm font-medium">{event.location}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -178,6 +172,12 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                   <UserPlus className="w-4 h-4" />
                   Add Attendees
                 </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 mb-4">
+                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" /> Will participate</span>
+                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Pending invitation</span>
+                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Will not participate</span>
               </div>
 
               {/* Add Attendees Panel */}
@@ -265,14 +265,17 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                         {attendee.firstName.charAt(0)}
                         {attendee.lastName.charAt(0)}
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">
-                          {attendee.firstName} {attendee.lastName}
-                        </p>
-                        <p className="text-sm text-gray-600 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {attendee.email}
-                        </p>
+                      <div className="flex-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {attendee.firstName} {attendee.lastName}
+                          </p>
+                          <p className="text-sm text-gray-600 flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            {attendee.email}
+                          </p>
+                        </div>
+                        <div className="sm:ml-4">{renderStatusBadge(attendee.rsvpStatus)}</div>
                       </div>
                     </div>
                   ))

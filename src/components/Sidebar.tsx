@@ -8,6 +8,15 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
+  const handleLogoutClick = () => {
+    console.log('Logout button clicked in Sidebar');
+    if (onLogout) {
+      onLogout();
+    } else {
+      console.error('onLogout is not defined!');
+    }
+  };
+
   const navItems = [
     { icon: Home, label: 'Home', value: 'home' },
     { icon: Users, label: 'Contacts', value: 'contacts' },
@@ -65,7 +74,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
       {/* Logout */}
       <div className="p-4 border-t border-white/10">
         <button
-          onClick={onLogout}
+          onClick={handleLogoutClick}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
         >
           <LogOut className="w-5 h-5" />

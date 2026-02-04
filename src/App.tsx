@@ -22,6 +22,7 @@ import { sendVerificationEmail } from './components/email/sendVerificationEmail'
 import { supabase } from './lib/supabaseClient';
 import { sendEventInvites } from './lib/eventInviteService';
 import { updateEvent, deleteEventPermanently } from './lib/eventService';
+import { linkMyAccountToTeam } from './lib/linkAccountService';
 import {
   fetchArchivedTeamMembers,
   restoreTeamMember,
@@ -425,12 +426,26 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       if (isMounted) {
         setIsLoggedIn(!!data.session);
+        // Auto-link user to team if logged in
+        if (data.session) {
+          linkMyAccountToTeam().catch((err) => {
+            console.warn('Could not auto-link on session restore:', err);
+          });
+        }
       }
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (isMounted) {
         setIsLoggedIn(!!session);
+        // Auto-link user to team when auth state changes (e.g., after OAuth)
+        if (session) {
+          try {
+            await linkMyAccountToTeam();
+          } catch (err) {
+            console.warn('Could not auto-link on auth change:', err);
+          }
+        }
       }
     });
 
@@ -950,11 +965,18 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      console.log('Logging out...');
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+        throw error;
+      }
+      console.log('Logout successful');
     } catch (error) {
       console.error('Supabase: failed to sign out', error);
     }
 
+    // Clear all state
     setIsLoggedIn(false);
     setActiveTab('home');
     setShowForm(false);
@@ -966,6 +988,9 @@ export default function App() {
     setShowCreateEvent(false);
     setViewingEvent(null);
     setShowDeleteConfirm(false);
+    setContacts([]);
+    setEvents([]);
+    setArchivedTeamMembers([]);
   };
 
   const handleReset = () => {

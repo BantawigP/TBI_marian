@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Users, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { linkMyAccountToTeam } from '../lib/linkAccountService';
 
 interface LoginProps {
   onLogin: () => void;
@@ -32,6 +33,14 @@ export function Login({ onLogin }: LoginProps) {
       }
 
       if (data.session) {
+        // Automatically link user to their team member record
+        try {
+          await linkMyAccountToTeam();
+        } catch (linkError) {
+          console.warn('Could not auto-link account:', linkError);
+          // Don't block login if linking fails
+        }
+        
         onLogin();
       } else {
         setError('Sign in did not return a session. Please try again.');
@@ -44,10 +53,18 @@ export function Login({ onLogin }: LoginProps) {
   const handleGoogle = async () => {
     setError(null);
     setGoogleLoading(true);
+    
+    // Use window.location.origin to ensure we redirect back to the current URL
+    const currentOrigin = window.location.origin;
+    
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${currentOrigin}/auth/callback`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
       },
     });
 

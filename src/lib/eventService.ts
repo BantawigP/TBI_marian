@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import type { Event, Contact } from '../types'
+import type { Event, Contact, RsvpStatus } from '../types'
 
 const numberOrNull = (value: string | number | undefined | null) => {
   const parsed = Number(value)
@@ -42,6 +42,24 @@ const ensureIdByName = async (
   return (data as Record<string, any> | null)?.[idColumn] ?? null;
 };
 
+const insertEventParticipants = async (
+  rows: Array<{ event_id: number; alumni_id: number; rsvp_status?: RsvpStatus }>
+) => {
+  if (!rows.length) return;
+
+  const { error } = await supabase.from('event_participants').insert(rows);
+
+  if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+    console.warn('event_participants.rsvp_status missing; inserting without status');
+    const fallbackRows = rows.map(({ event_id, alumni_id }) => ({ event_id, alumni_id }));
+    const { error: fallbackError } = await supabase.from('event_participants').insert(fallbackRows);
+    if (fallbackError) throw fallbackError;
+    return;
+  }
+
+  if (error) throw error;
+};
+
 /**
  * Creates an event and saves it to the database
  * @param eventData - Event details (title, description, date, time, location)
@@ -77,15 +95,13 @@ export async function createEvent(
     if (eventId && attendees.length > 0) {
       const attendeeRows = attendees
         .filter((attendee) => attendee.alumniId != null)
-        .map((attendee) => ({ event_id: eventId, alumni_id: attendee.alumniId }));
+        .map((attendee) => ({
+          event_id: eventId,
+          alumni_id: attendee.alumniId as number,
+          rsvp_status: attendee.rsvpStatus ?? 'pending',
+        }));
 
-      if (attendeeRows.length > 0) {
-        const { error: attendeeError } = await supabase
-          .from('event_participants')
-          .insert(attendeeRows)
-
-        if (attendeeError) throw attendeeError
-      }
+      await insertEventParticipants(attendeeRows);
     }
 
     // Return the event with attendees
@@ -167,15 +183,13 @@ export async function updateEvent(
     if (attendees.length > 0) {
       const attendeeRows = attendees
         .filter((attendee) => attendee.alumniId != null)
-        .map((attendee) => ({ event_id: parseInt(eventId), alumni_id: attendee.alumniId }));
+        .map((attendee) => ({
+          event_id: parseInt(eventId),
+          alumni_id: attendee.alumniId as number,
+          rsvp_status: attendee.rsvpStatus ?? 'pending',
+        }));
 
-      if (attendeeRows.length > 0) {
-        const { error: attendeeError } = await supabase
-          .from('event_participants')
-          .insert(attendeeRows)
-
-        if (attendeeError) throw attendeeError
-      }
+      await insertEventParticipants(attendeeRows);
     }
 
     // Return the updated event with attendees

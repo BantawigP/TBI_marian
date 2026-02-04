@@ -1,4 +1,5 @@
 export type ContactStatus = 'Verified' | 'Unverified';
+export type RsvpStatus = 'going' | 'not_going' | 'pending';
 
 // Frontend contact model mapped from the Supabase alumni schema
 // plus resolved dimension names for college/program/company/occupation.
@@ -23,6 +24,7 @@ export interface Contact {
   locationId?: number;
   alumniId?: number;
   alumniAddressId?: number;
+  rsvpStatus?: RsvpStatus;
 }
 
 // Frontend event model mapped from the Supabase events schema.

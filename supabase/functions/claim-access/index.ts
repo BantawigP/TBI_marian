@@ -12,25 +12,30 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("Missing required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
-}
+console.log("SUPABASE_URL set:", !!SUPABASE_URL);
+console.log("SUPABASE_SERVICE_ROLE_KEY set:", !!SUPABASE_SERVICE_ROLE_KEY);
 
-const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-
-const hashToken = async (token: string) => {
-  const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-};
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { ...corsHeaders } });
   }
 
+  if (!supabase) {
+    return new Response(JSON.stringify({ error: "Supabase server configuration missing" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const body = await req.json();
     const token = body?.token as string | undefined;
+
+    console.log("Received token:", token ? token.substring(0, 8) + "..." : "none");
 
     if (!token) {
       return new Response(JSON.stringify({ error: "Missing token" }), {
@@ -40,17 +45,20 @@ serve(async (req) => {
     }
 
     const nowIso = new Date().toISOString();
+    console.log("Looking up invite, current time:", nowIso);
 
     const { data: invite, error: lookupError } = await supabase
       .from("access_invites")
-      .select("id, team_member_id, email, role_id, expires_at, used_at")
+      .select("*")
       .eq("token", token)
       .gt("expires_at", nowIso)
       .maybeSingle();
 
+    console.log("Lookup result:", { invite: invite ? "found" : "not found", error: lookupError });
+
     if (lookupError) {
       console.error("Lookup error", lookupError);
-      return new Response(JSON.stringify({ error: "Lookup failed" }), {
+      return new Response(JSON.stringify({ error: "Lookup failed", detail: lookupError.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -65,9 +73,18 @@ serve(async (req) => {
 
     // Validate signed-in user
     const jwt = req.headers.get("Authorization")?.replace("Bearer ", "") || "";
-    const { data: userData, error: userError } = await supabase.auth.getUser(jwt);
+    
+    // Create a client with the user's JWT to verify authentication
+    const userSupabase = createClient(
+      SUPABASE_URL!,
+      Deno.env.get("SUPABASE_ANON_KEY") || "",
+      { global: { headers: { Authorization: `Bearer ${jwt}` } } }
+    );
+    
+    const { data: userData, error: userError } = await userSupabase.auth.getUser();
 
     if (userError || !userData?.user) {
+      console.error("Auth error:", userError);
       return new Response(JSON.stringify({ error: "You must be signed in to claim access" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

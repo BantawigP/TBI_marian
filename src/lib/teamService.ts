@@ -185,6 +185,9 @@ export async function createTeamMember(member: Omit<TeamMember, 'id'>): Promise<
 
     if (error) {
       console.error('Error creating team member:', error);
+      if (error.code === '23505' && error.message?.includes('teams_email_key')) {
+        throw new Error('A team member with this email already exists. Please use a different email.');
+      }
       throw new Error(`Failed to create team member: ${error.message}`);
     }
 
@@ -292,29 +295,20 @@ export async function grantAccess(
   teamMemberId: string,
   email: string,
   role: 'Manager' | 'Member'
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; warning?: string; claimLink?: string; actionLink?: string }> {
   try {
-    // Get current session
-    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      throw new Error('Authentication error. Please log in again.');
-    }
-    
-    if (!session) {
-      console.error('No active session found');
-      throw new Error('You must be logged in to grant access. Please log in again.');
-    }
-
+    // Refresh session first to ensure we have a valid token
     const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      console.warn('Session refresh failed:', refreshError);
-    } else if (refreshData.session) {
-      session = refreshData.session;
+    
+    if (refreshError || !refreshData.session) {
+      console.error('Session refresh error:', refreshError);
+      throw new Error('Your session has expired. Please log in again.');
     }
 
-    console.log('✓ Session found, granting access...');
+    const session = refreshData.session;
+    console.log('✓ Session refreshed, granting access...');
+    console.log('Token length:', session.access_token.length);
+    console.log('User:', session.user.email);
 
     // Call the grant-access Edge Function
     const response = await fetch(
@@ -335,6 +329,9 @@ export async function grantAccess(
     );
 
     const rawText = await response.text();
+    console.log('Response status:', response.status);
+    console.log('Response body:', rawText);
+    
     const result = rawText ? JSON.parse(rawText) : {};
 
     if (!response.ok) {
@@ -346,6 +343,9 @@ export async function grantAccess(
     return {
       success: true,
       message: result.message || 'Access invitation sent successfully',
+      warning: result.warning,
+      claimLink: result.claimLink,
+      actionLink: result.actionLink,
     };
   } catch (error) {
     console.error('Error granting access:', error);
@@ -359,19 +359,14 @@ export async function grantAccess(
  */
 export async function claimAccess(token: string): Promise<{ success: boolean; message: string }> {
   try {
-    // Get current session
-    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Refresh session first to ensure we have a valid token
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
     
-    if (sessionError || !session) {
-      throw new Error('You must be signed in to claim access');
+    if (refreshError || !refreshData.session) {
+      throw new Error('Your session has expired. Please sign in again to claim access.');
     }
 
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      console.warn('Session refresh failed:', refreshError);
-    } else if (refreshData.session) {
-      session = refreshData.session;
-    }
+    const session = refreshData.session;
 
     // Call the claim-access Edge Function
     const response = await fetch(

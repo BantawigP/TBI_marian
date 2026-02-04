@@ -16,7 +16,35 @@ const corsHeaders = {
 };
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-const DEFAULT_FROM = Deno.env.get("RESEND_FROM") || "Marian Alumni <onboarding@resend.dev>";
+const DEFAULT_FROM_ENV = Deno.env.get("RESEND_FROM");
+const DEFAULT_FROM_FALLBACK = "onboarding@resend.dev";
+const normalizeFrom = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  let trimmed = value.trim();
+  trimmed = trimmed.replace(/^['\"]+|['\"]+$/g, "");
+
+  const emailOnly = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const nameEmail = /^(.+)<([^@\s]+@[^@\s]+\.[^@\s]+)>$/;
+
+  if (emailOnly.test(trimmed)) return trimmed;
+
+  const nameEmailMatch = trimmed.match(nameEmail);
+  if (nameEmailMatch) {
+    const name = nameEmailMatch[1]?.trim();
+    const email = nameEmailMatch[2]?.trim();
+    if (!email) return null;
+    return name ? `${name} <${email}>` : email;
+  }
+
+  const emailMatch = trimmed.match(/[^@\s]+@[^@\s]+\.[^@\s]+/);
+  if (emailMatch) return emailMatch[0];
+  return null;
+};
+
+const DEFAULT_FROM = normalizeFrom(DEFAULT_FROM_ENV) || DEFAULT_FROM_FALLBACK;
+if (DEFAULT_FROM_ENV && !normalizeFrom(DEFAULT_FROM_ENV)) {
+  console.warn("Invalid RESEND_FROM format. Falling back to default email-only sender.");
+}
 const APP_URL = (Deno.env.get("APP_URL") || "http://localhost:5173").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -101,10 +129,19 @@ serve(async (req) => {
   }
 
   const jwt = req.headers.get("Authorization")?.replace("Bearer ", "") || "";
-  const { data: userData, error: userError } = await supabase.auth.getUser(jwt);
+  
+  // Create a client with the user's JWT to verify authentication
+  const userSupabase = createClient(
+    SUPABASE_URL!,
+    Deno.env.get("SUPABASE_ANON_KEY") || "",
+    { global: { headers: { Authorization: `Bearer ${jwt}` } } }
+  );
+  
+  const { data: userData, error: userError } = await userSupabase.auth.getUser();
 
   if (userError || !userData?.user) {
-    return new Response(JSON.stringify({ error: "You must be signed in to grant access" }), {
+    console.error("Auth error:", userError);
+    return new Response(JSON.stringify({ error: userError?.message || "Invalid JWT" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -257,6 +294,11 @@ serve(async (req) => {
   const html = renderInviteHTML(fullName, actionLink, claimLink);
   const text = renderInviteText(fullName, actionLink, claimLink);
 
+  // Ensure from field is always valid - use hardcoded fallback if needed
+  const fromAddress = DEFAULT_FROM || "onboarding@resend.dev";
+  console.log("Using from address:", fromAddress);
+  console.log("Sending email to:", email);
+
   const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -266,7 +308,7 @@ serve(async (req) => {
     body: JSON.stringify({
       to: email,
       subject: "Your access to Marian TBI Connect",
-      from: DEFAULT_FROM,
+      from: fromAddress,
       html,
       text,
     }),
@@ -275,6 +317,21 @@ serve(async (req) => {
   if (!resendRes.ok) {
     const errorText = await resendRes.text();
     console.error("Resend error", errorText);
+    
+    // Check if it's a domain verification issue (free tier limitation)
+    if (errorText.includes("verify a domain") || errorText.includes("testing emails")) {
+      // Access was already granted, email just couldn't be sent
+      return new Response(JSON.stringify({ 
+        message: "Access granted successfully! However, the invitation email could not be sent due to Resend free tier limitations. Please share the magic link manually or verify a domain at resend.com/domains.",
+        warning: "Email not sent - Resend domain not verified",
+        claimLink: claimLink,
+        actionLink: actionLink
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
     return new Response(JSON.stringify({ error: "Resend request failed", detail: errorText }), {
       status: 502,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

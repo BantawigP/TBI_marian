@@ -17,7 +17,7 @@ import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
-import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember } from './types';
+import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
 import { sendEventInvites } from './lib/eventInviteService';
@@ -397,6 +397,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [graduatedFrom, setGraduatedFrom] = useState('');
   const [graduatedTo, setGraduatedTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ContactStatus>('all');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -409,6 +410,8 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
+  const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
+  const [isRoleLoading, setIsRoleLoading] = useState(false);
 
   // Check if URL contains claim-access token
   useEffect(() => {
@@ -439,6 +442,61 @@ export default function App() {
       subscription?.subscription.unsubscribe();
     };
   }, []);
+
+  const fetchCurrentUserRole = async () => {
+    setIsRoleLoading(true);
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        setCurrentUserRole(null);
+        return;
+      }
+
+      const { data: roleRow, error: roleError } = await supabase
+        .from('teams')
+        .select('id, roles(role_name)')
+        .eq('user_id', userData.user.id)
+        .maybeSingle();
+
+      if (roleError) {
+        console.warn('Supabase: failed to load current user role', roleError);
+        setCurrentUserRole(null);
+        return;
+      }
+
+      const rolesData = roleRow?.roles as { role_name?: string } | { role_name?: string }[] | null;
+      const roleName = Array.isArray(rolesData)
+        ? rolesData[0]?.role_name ?? null
+        : rolesData?.role_name ?? null;
+      setCurrentUserRole((roleName as TeamRole | null) ?? null);
+    } finally {
+      setIsRoleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setCurrentUserRole(null);
+      return;
+    }
+
+    fetchCurrentUserRole();
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (currentUserRole === 'Member' && activeTab === 'team') {
+      setActiveTab('home');
+    }
+  }, [activeTab, currentUserRole]);
+
+  const isMemberPath = window.location.pathname === '/member';
+
+  useEffect(() => {
+    if (!isMemberPath || !isLoggedIn || isRoleLoading) return;
+    if (currentUserRole !== 'Member') {
+      window.location.replace('/');
+    }
+  }, [currentUserRole, isLoggedIn, isMemberPath, isRoleLoading]);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null');
@@ -901,7 +959,7 @@ export default function App() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'event_participants' },
         (payload) => {
-          const row: any = payload.new ?? payload.record;
+          const row: any = payload.new ?? payload.old;
           if (!row) return;
 
           const eventId = row.event_id;
@@ -972,6 +1030,7 @@ export default function App() {
     setSearchQuery('');
     setGraduatedFrom('');
     setGraduatedTo('');
+    setStatusFilter('all');
     setSelectedContacts([]);
   };
 
@@ -1374,6 +1433,19 @@ export default function App() {
     setTeamRefreshToken((token) => token + 1);
   };
 
+  const handleSendEmailCampaign = () => {
+    setActiveTab('events');
+  };
+
+  const handleEmailUnverifiedContacts = () => {
+    setSearchQuery('');
+    setGraduatedFrom('');
+    setGraduatedTo('');
+    setStatusFilter('Unverified');
+    setSelectedContacts([]);
+    setActiveTab('contacts');
+  };
+
 
 
   const filteredContacts = contacts.filter((contact) => {
@@ -1404,7 +1476,9 @@ export default function App() {
       return fromOk && toOk;
     })();
 
-    return matchesQuery && matchesDate;
+    const matchesStatus = statusFilter === 'all' || contact.status === statusFilter;
+
+    return matchesQuery && matchesDate && matchesStatus;
   });
 
   // Show login page if not logged in
@@ -1417,14 +1491,49 @@ export default function App() {
     return <ClaimAccess onSuccess={() => {
       setShowClaimAccess(false);
       setIsLoggedIn(true);
+      fetchCurrentUserRole();
       // Clear token from URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }} />;
   }
 
+  if (isMemberPath) {
+    if (isRoleLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#F5F1ED]">
+          <div className="rounded-lg border border-gray-200 bg-white px-6 py-4 text-gray-700">
+            Loading your access...
+          </div>
+        </div>
+      );
+    }
+
+    if (currentUserRole !== 'Member') {
+      return null;
+    }
+
+    return (
+      <div className="min-h-screen bg-[#F5F1ED]">
+        <main className="max-w-[1200px] mx-auto p-8">
+          <Home
+            contacts={contacts}
+            onViewContact={handleViewContact}
+            onSendEmailCampaign={handleSendEmailCampaign}
+            onEmailUnverifiedContacts={handleEmailUnverifiedContacts}
+          />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[#F5F1ED]">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLogout={handleLogout}
+        currentUserRole={currentUserRole}
+      />
       
       <main className="flex-1 overflow-auto">
         <div className="max-w-[1400px] mx-auto p-8">
@@ -1441,7 +1550,12 @@ export default function App() {
           )}
 
           {activeTab === 'home' ? (
-            <Home contacts={contacts} onViewContact={handleViewContact} />
+            <Home
+              contacts={contacts}
+              onViewContact={handleViewContact}
+              onSendEmailCampaign={handleSendEmailCampaign}
+              onEmailUnverifiedContacts={handleEmailUnverifiedContacts}
+            />
           ) : activeTab === 'events' ? (
             <Events
               events={events}
@@ -1517,6 +1631,8 @@ export default function App() {
                   graduatedTo={graduatedTo}
                   setGraduatedFrom={setGraduatedFrom}
                   setGraduatedTo={setGraduatedTo}
+                  statusFilter={statusFilter}
+                  setStatusFilter={setStatusFilter}
                 />
               </div>
 

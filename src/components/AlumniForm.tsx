@@ -1,11 +1,16 @@
-import { useState } from 'react';
-import { FileText, User, Mail, Phone, GraduationCap, Briefcase, Building2, Calendar, Check, CheckCircle, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { FileText, User, Phone, GraduationCap, Briefcase, Building2, Calendar, Check, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
+import { Emailconfirmation } from './Emailconfirmation';
+import { sendVerificationEmail } from './email/sendVerificationEmail';
 
 export function AlumniForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [collegeOptions, setCollegeOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [isLoadingColleges, setIsLoadingColleges] = useState(true);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,6 +24,48 @@ export function AlumniForm() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadColleges = async () => {
+      setIsLoadingColleges(true);
+
+      try {
+        const { data, error } = await supabase
+          .from('colleges')
+          .select('college_id, college_name')
+          .order('college_name', { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        if (isMounted) {
+          const mapped = (data || []).map((college) => ({
+            id: college.college_id,
+            name: college.college_name,
+          }));
+          setCollegeOptions(mapped);
+        }
+      } catch (error: any) {
+        console.error('Error loading colleges:', error);
+        toast.error('Unable to load colleges', {
+          description: error.message || 'Please refresh and try again.',
+        });
+      } finally {
+        if (isMounted) {
+          setIsLoadingColleges(false);
+        }
+      }
+    };
+
+    loadColleges();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -48,6 +95,9 @@ export function AlumniForm() {
     }
     if (!formData.program.trim()) {
       newErrors.program = 'Program/Course is required';
+    }
+    if (!privacyAccepted) {
+      newErrors.privacy = 'To proceed, please read and accept the Data Privacy Policy.';
     }
 
     setErrors(newErrors);
@@ -109,31 +159,13 @@ export function AlumniForm() {
         emailId = newEmail.email_id;
       }
 
-      // Get or create college
+      // Get selected college id from loaded options
       let collegeId: number | null = null;
       if (formData.college) {
-        const { data: collegeData, error: collegeError } = await supabase
-          .from('colleges')
-          .select('college_id')
-          .eq('college_name', formData.college)
-          .maybeSingle();
-
-        if (collegeError && collegeError.code !== 'PGRST116') {
-          throw collegeError;
-        }
-
-        if (collegeData) {
-          collegeId = collegeData.college_id;
-        } else {
-          const { data: newCollege, error: insertCollegeError } = await supabase
-            .from('colleges')
-            .insert({ college_name: formData.college })
-            .select('college_id')
-            .single();
-
-          if (insertCollegeError) throw insertCollegeError;
-          collegeId = newCollege.college_id;
-        }
+        const matchedCollege = collegeOptions.find(
+          (college) => college.name === formData.college,
+        );
+        collegeId = matchedCollege?.id ?? null;
       }
 
       // Get or create program
@@ -263,14 +295,29 @@ export function AlumniForm() {
         throw insertError;
       }
 
+      const normalizedEmail = formData.email.toLowerCase().trim();
+
+      try {
+        await sendVerificationEmail({
+          to: normalizedEmail,
+          firstName: formData.firstName.trim(),
+          brandName: 'MARIAN TBI Connect',
+        });
+      } catch (emailError: any) {
+        console.error('Error sending verification email:', emailError);
+        toast.error('Verification email failed', {
+          description: emailError.message || 'Please contact support if you did not receive an email.',
+        });
+      }
+
       toast.success('Form submitted successfully!');
       setIsSubmitted(true);
       
-      // Reset form after 5 seconds
+      // Reset form after 10 seconds bwahahaha
       setTimeout(() => {
         setIsSubmitted(false);
         handleReset();
-      }, 5000);
+      }, 10000);
     } catch (error: any) {
       console.error('Error submitting form:', error);
       toast.error('Submission failed', {
@@ -294,34 +341,15 @@ export function AlumniForm() {
       company: '',
     });
     setErrors({});
+    setPrivacyAccepted(false);
   };
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-12 text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-12 h-12 text-green-600" />
-          </div>
-          <h2 className="text-3xl font-semibold text-gray-900 mb-4">Thank You!</h2>
-          <p className="text-lg text-gray-600 mb-6">
-            Your information has been successfully submitted to the MARIAN TBI Connect alumni database.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-            <p className="text-sm text-blue-900">
-              <strong>What's Next?</strong>
-              <br />
-              Our team will review your information and you'll receive a confirmation email at <strong>{formData.email}</strong> within 24-48 hours.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsSubmitted(false)}
-            className="px-8 py-3 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors font-medium"
-          >
-            Submit Another Response
-          </button>
-        </div>
-      </div>
+      <Emailconfirmation
+        email={formData.email}
+        onSubmitAnother={() => setIsSubmitted(false)}
+      />
     );
   }
 
@@ -404,9 +432,6 @@ export function AlumniForm() {
               {/* Contact Information Section */}
               <div>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Mail className="w-5 h-5 text-blue-600" />
-                  </div>
                   <h2 className="text-xl font-semibold text-gray-900">Contact Information</h2>
                 </div>
                 <div className="space-y-6">
@@ -469,20 +494,23 @@ export function AlumniForm() {
                       name="college"
                       value={formData.college}
                       onChange={handleInputChange}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isLoadingColleges}
                       className={`w-full px-4 py-3 border ${
                         errors.college ? 'border-red-500' : 'border-gray-300'
                       } rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed`}
                     >
                       <option value="">Select College</option>
-                      <option value="Business">College of Business</option>
-                      <option value="Engineering">College of Engineering</option>
-                      <option value="IT">College of Computer Studies</option>
-                      <option value="Arts">College of Arts and Sciences</option>
-                      <option value="Education">College of Education</option>
-                      <option value="Health Sciences">College of Health Sciences</option>
-                      <option value="Nursing">College of Nursing</option>
-                      <option value="Law">College of Law</option>
+                      {isLoadingColleges ? (
+                        <option value="" disabled>
+                          Loading colleges...
+                        </option>
+                      ) : (
+                        collegeOptions.map((college) => (
+                          <option key={college.id} value={college.name}>
+                            {college.name}
+                          </option>
+                        ))
+                      )}
                     </select>
                     {errors.college && (
                       <p className="text-red-500 text-sm mt-1">{errors.college}</p>
@@ -576,20 +604,47 @@ export function AlumniForm() {
 
               {/* Privacy Notice */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Check className="w-5 h-5 text-blue-600" />
-                    </div>
-                  </div>
-                  <div>
+                <div>
                     <h3 className="font-semibold text-blue-900 mb-2">Privacy & Data Protection</h3>
                     <p className="text-sm text-blue-800 leading-relaxed">
                       Your information will be used exclusively for alumni network purposes and will be kept confidential 
                       in accordance with our data privacy policy and the Data Privacy Act of 2012. We are committed to 
                       protecting your personal information.
                     </p>
-                  </div>
+                    <div className="mt-4">
+                      <label className="flex items-start gap-3 text-sm text-blue-900">
+                        <input
+                          type="checkbox"
+                          name="privacyAccepted"
+                          checked={privacyAccepted}
+                          onChange={(e) => {
+                            setPrivacyAccepted(e.target.checked);
+                            if (errors.privacy) {
+                              setErrors((prev) => ({ ...prev, privacy: '' }));
+                            }
+                          }}
+                          disabled={isSubmitting}
+                          className={`mt-0.5 h-4 w-4 rounded border ${
+                            errors.privacy ? 'border-red-500' : 'border-blue-300'
+                          } text-[#FF2B5E] focus:ring-[#FF2B5E]/30 disabled:cursor-not-allowed`}
+                        />
+                        <span>
+                          I have read and agree to the{' '}
+                          <a
+                            href="/privacy-policy"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#FF2B5E] hover:underline font-medium"
+                          >
+                            Data Privacy Policy
+                          </a>
+                          .
+                        </span>
+                      </label>
+                      {errors.privacy && (
+                        <p className="text-red-500 text-sm mt-2">{errors.privacy}</p>
+                      )}
+                    </div>
                 </div>
               </div>
 

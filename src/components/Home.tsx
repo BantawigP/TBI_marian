@@ -1,12 +1,19 @@
-import { Users, UserCheck, UserX, TrendingUp, Calendar, Mail, Phone } from 'lucide-react';
+import { Users, UserCheck, UserX, TrendingUp, Calendar, Mail } from 'lucide-react';
 import type { Contact } from '../types';
 
 interface HomeProps {
   contacts: Contact[];
   onViewContact: (contact: Contact) => void;
+  onSendEmailCampaign: () => void;
+  onEmailUnverifiedContacts: () => void;
 }
 
-export function Home({ contacts, onViewContact }: HomeProps) {
+export function Home({
+  contacts,
+  onViewContact,
+  onSendEmailCampaign,
+  onEmailUnverifiedContacts,
+}: HomeProps) {
   const totalContacts = contacts.length;
   const contactedCount = contacts.filter((c) => c.status === 'Verified').length;
   const pendingCount = contacts.filter((c) => c.status === 'Unverified').length;
@@ -169,13 +176,19 @@ export function Home({ contacts, onViewContact }: HomeProps) {
               Reach out to your unverified contacts and grow your network.
             </p>
             <div className="flex gap-3">
-              <button className="bg-white text-[#FF2B5E] px-6 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors flex items-center gap-2">
+              <button
+                onClick={onSendEmailCampaign}
+                className="bg-white text-[#FF2B5E] px-6 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors flex items-center gap-2"
+              >
                 <Mail className="w-4 h-4" />
                 Send Email Campaign
               </button>
-              <button className="bg-white/20 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/30 transition-colors flex items-center gap-2">
-                <Phone className="w-4 h-4" />
-                Call Unverified Contacts
+              <button
+                onClick={onEmailUnverifiedContacts}
+                className="bg-white/20 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/30 transition-colors flex items-center gap-2"
+              >
+                <Mail className="w-4 h-4" />
+                Email Unverified Contacts
               </button>
             </div>
           </div>

@@ -1,13 +1,15 @@
 import { Home, Users, Calendar, Archive, FileText, LogOut, UserCog } from 'lucide-react';
+import type { TeamRole } from '../types';
 import logo from '../assets/marian tbi.jpg';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onLogout: () => void;
+  currentUserRole?: TeamRole | null;
 }
 
-export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, onLogout, currentUserRole }: SidebarProps) {
   const navItems = [
     { icon: Home, label: 'Home', value: 'home' },
     { icon: Users, label: 'Contacts', value: 'contacts' },
@@ -16,6 +18,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
     { icon: Archive, label: 'Archives', value: 'archives' },
     { icon: FileText, label: 'Form Preview', value: 'preview' },
   ];
+
+  const visibleNavItems =
+    currentUserRole === 'Member'
+      ? navItems.filter((item) => item.value !== 'team')
+      : navItems;
 
   return (
     <aside className="w-64 bg-[#FF2B5E] text-white flex flex-col">
@@ -34,7 +41,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 p-4">
         <ul className="space-y-2">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <li key={item.value}>
               <button
                 onClick={() => onTabChange(item.value)}

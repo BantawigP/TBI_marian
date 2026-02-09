@@ -263,39 +263,13 @@ export function Login({ onLogin }: LoginProps) {
                 <span>Continue with Google</span>
               </button>
 
-              {/* Demo Credentials */}
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-900 font-medium mb-2">
-                  Demo Credentials:
-                </p>
-                <p className="text-xs text-blue-800">
-                  Email: demo@marian.edu
-                  <br />
-                  Password: demo123
-                </p>
-                <p className="text-xs text-blue-700 mt-2 italic">
-                  (Or use any email/password to login)
-                </p>
-              </div>
             </form>
 
-            {/* Sign Up Link */}
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Don't have an account?{' '}
-                <a
-                  href="#"
-                  className="text-[#FF2B5E] hover:text-[#E6275A] font-medium"
-                >
-                  Sign up
-                </a>
-              </p>
-            </div>
           </div>
 
           {/* Footer */}
           <div className="mt-6 text-center text-sm text-gray-500">
-            <p>© 2026 Marian TBI Connect. All rights reserved.</p>
+            <p>© 2026 MARIAN TBI Connect. All rights reserved.</p>
           </div>
         </div>
       </div>

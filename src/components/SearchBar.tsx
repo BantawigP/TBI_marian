@@ -9,6 +9,8 @@ interface SearchBarProps {
   graduatedTo: string;
   setGraduatedFrom: (value: string) => void;
   setGraduatedTo: (value: string) => void;
+  statusFilter: 'all' | 'Verified' | 'Unverified';
+  setStatusFilter: (value: 'all' | 'Verified' | 'Unverified') => void;
 }
 
 export function SearchBar({
@@ -19,6 +21,8 @@ export function SearchBar({
   graduatedTo,
   setGraduatedFrom,
   setGraduatedTo,
+  statusFilter,
+  setStatusFilter,
 }: SearchBarProps) {
   const [showFilters, setShowFilters] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -34,7 +38,10 @@ export function SearchBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const activeFilters = Number(Boolean(graduatedFrom)) + Number(Boolean(graduatedTo));
+  const activeFilters =
+    Number(Boolean(graduatedFrom)) +
+    Number(Boolean(graduatedTo)) +
+    Number(statusFilter !== 'all');
 
   return (
     <div className="flex gap-3 flex-wrap lg:flex-nowrap items-center">
@@ -71,6 +78,18 @@ export function SearchBar({
               <span className="text-sm font-semibold">Graduated date range</span>
             </div>
             <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Verified' | 'Unverified')}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                >
+                  <option value="all">All</option>
+                  <option value="Verified">Verified</option>
+                  <option value="Unverified">Unverified</option>
+                </select>
+              </div>
               <div className="space-y-1">
                 <label className="text-xs text-gray-500">From</label>
                 <input

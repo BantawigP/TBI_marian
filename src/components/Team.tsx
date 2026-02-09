@@ -10,7 +10,8 @@ interface TeamProps {
 
 export function Team({ refreshToken, onArchived }: TeamProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
@@ -53,6 +54,7 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -154,13 +156,8 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
   };
 
   const handleGrantAccess = async (member: TeamMember) => {
-    if (member.hasAccess) {
+    if (member.hasAccess && member.userId) {
       setError('This member already has system access');
-      return;
-    }
-
-    if (member.role !== 'Manager' && member.role !== 'Member') {
-      setError('Only Manager and Member roles can be granted access');
       return;
     }
 
@@ -171,19 +168,28 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     try {
       setLoading(true);
       setError(null);
-      const result = await grantAccess(member.id, member.email, member.role);
+      const result = await grantAccess(member.id, member.email, member.role as 'Manager' | 'Member');
       
-      if (result.warning && result.actionLink) {
-        // Email couldn't be sent due to Resend limitations - show the link
+      // Always show the access link so the admin can share it manually
+      if (result.actionLink) {
+        const emailNote = result.warning
+          ? 'The invitation email could not be sent.'
+          : 'An invitation email has also been sent.';
+        
         const copyLink = confirm(
-          `${result.message}\n\nWould you like to copy the magic link to share manually?`
+          `Access granted for ${member.name}!\n\n${emailNote}\n\nWould you like to copy the sign-in link to share manually?`
         );
         if (copyLink) {
-          await navigator.clipboard.writeText(result.actionLink);
-          alert('Magic link copied to clipboard!\n\nShare this link with ' + member.email);
+          try {
+            await navigator.clipboard.writeText(result.actionLink);
+            alert('Sign-in link copied to clipboard!\n\nShare this link with ' + member.email);
+          } catch {
+            // Clipboard API may fail in some browsers - show the link instead
+            prompt('Copy this sign-in link and share it with ' + member.email + ':', result.actionLink);
+          }
         }
       } else {
-        alert(result.message + '\n\nA magic link has been sent to ' + member.email);
+        alert(result.message || 'Access granted successfully.');
       }
       await loadTeamMembers(); // Reload to update has_access status
     } catch (err) {
@@ -263,8 +269,7 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          disabled={loading}
-          className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Member
@@ -348,7 +353,12 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       </div>
 
       {/* Team Members Grid */}
-      {filteredMembers.length === 0 ? (
+      {initialLoading ? (
+        <div className="bg-white rounded-xl p-12 border border-gray-200 text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-[#FF2B5E]" />
+          <p className="text-gray-600">Loading team members...</p>
+        </div>
+      ) : filteredMembers.length === 0 ? (
         <div className="bg-white rounded-xl p-12 border border-gray-200 text-center">
           <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No team members found</h3>
@@ -423,12 +433,11 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
-                  {/* Show Grant Access button for Manager/Member without access */}
-                  {(member.role === 'Manager' || member.role === 'Member') && !member.hasAccess ? (
+                {/* Show Grant Access button for members without access */}
+                {!member.hasAccess ? (
                     <button
                       onClick={() => handleGrantAccess(member)}
-                      disabled={loading}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
                     >
                       <Key className="w-4 h-4" />
                       Grant Access
@@ -442,15 +451,13 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
                   
                   <button
                     onClick={() => handleEditClick(member)}
-                    disabled={loading}
-                    className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteMember(member.id, member.name)}
-                    disabled={loading}
-                    className="flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

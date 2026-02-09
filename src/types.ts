@@ -55,4 +55,5 @@ export interface TeamMember {
   phone?: string;
   joinedDate?: string;
   hasAccess?: boolean;
+  userId?: string;
 }

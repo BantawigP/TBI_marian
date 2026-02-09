@@ -6,7 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 interface Payload {
   teamMemberId: number;
   email: string;
-  role: "Manager" | "Member";
+  role: string;
 }
 
 const corsHeaders = {
@@ -99,11 +99,11 @@ const renderInviteHTML = (name: string, actionLink: string, claimLink: string) =
   </tr>
 </table>`;
 
-const renderInviteText = (name: string, actionLink: string, claimLink: string) => `
+const renderInviteText = (name: string, actionLink: string | null, claimLink: string) => `
 Hi ${name || "there"},
 
-You’ve been granted access.
-Sign in: ${actionLink}
+You've been granted access to Marian TBI Connect.
+${actionLink ? `Sign in: ${actionLink}\n` : `Please sign up or sign in first, then claim your access.\n`}
 Claim access: ${claimLink}
 
 If you didn’t request this, ignore this email.
@@ -167,7 +167,7 @@ serve(async (req) => {
 
   const { data: member, error: memberError } = await supabase
     .from("teams")
-    .select("id, first_name, last_name, email, has_access")
+    .select("id, first_name, last_name, email, has_access, user_id")
     .eq("id", teamMemberId)
     .maybeSingle();
 
@@ -193,7 +193,7 @@ serve(async (req) => {
     });
   }
 
-  if (member.has_access === true) {
+  if (member.has_access === true && member.user_id) {
     return new Response(JSON.stringify({ error: "Member already has access" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -202,42 +202,106 @@ serve(async (req) => {
 
   const roleId = await getRoleIdByName(role);
 
-  // Create or get user with auto-confirm
+  // --- Ensure auth user exists ---
   let authUserId: string | null = null;
-  const { data: existingUsers } = await supabase.auth.admin.listUsers();
-  const existingUser = existingUsers?.users?.find(
-    (u) => u.email?.toLowerCase() === email.toLowerCase()
-  );
+  let actionLink: string | null = null;
+
+  // 1. Check if the auth user already exists
+  const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+  console.log("listUsers error?", listError?.message || "none", "count:", existingUsers?.users?.length);
+
+  const existingUser = listError
+    ? null
+    : (existingUsers?.users || []).find(
+        (u: { email?: string }) => (u.email || "").toLowerCase() === email.toLowerCase()
+      );
 
   if (existingUser) {
     authUserId = existingUser.id;
-    // Auto-confirm if not confirmed
-    if (!existingUser.email_confirmed_at) {
-      await supabase.auth.admin.updateUserById(existingUser.id, {
-        email_confirm: true,
-      });
-    }
+    console.log("Existing auth user found:", authUserId);
   } else {
-    // Create new user with auto-confirm
-    const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
+    // 2. User does NOT exist — create them in auth.users
+    console.log("Creating new auth user for:", email);
+    const tempPassword = crypto.randomUUID();
+
+    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
       email,
+      password: tempPassword,
       email_confirm: true,
-      user_metadata: {
-        full_name: `${member.first_name} ${member.last_name}`.trim(),
-      },
     });
 
-    if (createUserError) {
-      console.error("Create user error", createUserError);
-      return new Response(
-        JSON.stringify({ error: "Failed to create user", detail: createUserError.message }),
-        {
+    if (createError) {
+      console.error("createUser failed:", createError.message, "status:", createError.status);
+      
+      // Try generateLink as fallback
+      console.log("Trying generateLink fallback...");
+      const { data: linkFallback, error: linkFallbackErr } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: `${APP_URL}` },
+      });
+
+      if (!linkFallbackErr && linkFallback?.user?.id) {
+        authUserId = linkFallback.user.id;
+        actionLink = linkFallback.properties?.action_link || null;
+        console.log("Fallback generateLink succeeded:", authUserId);
+      } else {
+        console.error("Fallback generateLink also failed:", linkFallbackErr?.message);
+        // FAIL — do NOT continue without an auth user
+        return new Response(JSON.stringify({
+          error: "Failed to create authentication user",
+          detail: createError.message,
+          fallbackDetail: linkFallbackErr?.message,
+        }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+        });
+      }
+    } else {
+      authUserId = newUser.user?.id || null;
+      console.log("Auth user created:", authUserId);
+
+      if (!authUserId) {
+        return new Response(JSON.stringify({
+          error: "createUser returned success but no user ID",
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
-    authUserId = newUser?.user?.id || null;
+  }
+
+  // At this point authUserId MUST be set
+  if (!authUserId) {
+    return new Response(JSON.stringify({
+      error: "Could not determine auth user ID",
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // 3. Generate a magic link for the user to sign in
+  if (authUserId && !actionLink) {
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: { redirectTo: `${APP_URL}` },
+    });
+
+    if (!linkError && linkData?.properties?.action_link) {
+      actionLink = linkData.properties.action_link;
+    } else {
+      console.warn("Could not generate magic link:", linkError?.message);
+    }
+  }
+
+  // 4. Ensure email-confirmed
+  if (authUserId) {
+    await supabase.auth.admin.updateUserById(authUserId, {
+      email_confirm: true,
+    }).catch((err: unknown) => console.warn("Could not auto-confirm:", err));
   }
 
   const token = crypto.randomUUID();
@@ -254,41 +318,19 @@ serve(async (req) => {
 
   if (inviteError) {
     console.error("Invite insert error", inviteError);
-    return new Response(
-      JSON.stringify({ error: "Failed to create invitation", detail: inviteError.message }),
-      {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    // Still continue — the magic link already works, invite record is just for tracking
+    console.warn("Continuing without invite record...");
   }
 
   const { error: accessUpdateError } = await supabase
     .from("teams")
-    .update({ has_access: true, user_id: authUserId })
+    .update({ has_access: true, user_id: authUserId, auth_user_id: authUserId })
     .eq("id", teamMemberId);
 
   if (accessUpdateError) {
     console.error("Failed to update has_access", accessUpdateError);
   }
 
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-    options: {
-      redirectTo: `${APP_URL}`,
-    },
-  });
-
-  if (linkError || !linkData?.properties?.action_link) {
-    console.error("Generate link error", linkError);
-    return new Response(JSON.stringify({ error: "Failed to generate magic link" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const actionLink = linkData.properties.action_link;
   const fullName = `${member.first_name} ${member.last_name}`.trim();
 
   const html = renderInviteHTML(fullName, actionLink, claimLink);
@@ -318,27 +360,25 @@ serve(async (req) => {
     const errorText = await resendRes.text();
     console.error("Resend error", errorText);
     
-    // Check if it's a domain verification issue (free tier limitation)
-    if (errorText.includes("verify a domain") || errorText.includes("testing emails")) {
-      // Access was already granted, email just couldn't be sent
-      return new Response(JSON.stringify({ 
-        message: "Access granted successfully! However, the invitation email could not be sent due to Resend free tier limitations. Please share the magic link manually or verify a domain at resend.com/domains.",
-        warning: "Email not sent - Resend domain not verified",
-        claimLink: claimLink,
-        actionLink: actionLink
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    
-    return new Response(JSON.stringify({ error: "Resend request failed", detail: errorText }), {
-      status: 502,
+    // Access was already granted in the database.
+    // Always return the links so the admin can share them manually.
+    return new Response(JSON.stringify({ 
+      message: "Access granted successfully! However, the invitation email could not be sent. Please share the links below with the team member manually.",
+      warning: "Email not sent",
+      detail: errorText,
+      claimLink: claimLink,
+      actionLink: actionLink
+    }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  return new Response(JSON.stringify({ message: "Access invitation sent" }), {
+  return new Response(JSON.stringify({
+    message: "Access invitation sent successfully",
+    claimLink: claimLink,
+    actionLink: actionLink
+  }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });

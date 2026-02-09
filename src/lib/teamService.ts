@@ -14,6 +14,7 @@ interface TeamRow {
   avatar_color: string | null;
   is_active: boolean;
   has_access: boolean | null;
+  user_id: string | null;
   roles?: { id: number; role_name: string } | null;
   departments?: { id: number; department_name: string } | null;
 }
@@ -37,6 +38,7 @@ function rowToTeamMember(row: TeamRow): TeamMember {
     joinedDate: row.joined_date ? new Date(row.joined_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : undefined,
     avatarColor: row.avatar_color || '#FF2B5E',
     hasAccess: row.has_access ?? undefined,
+    userId: row.user_id ?? undefined,
   };
 }
 
@@ -308,17 +310,19 @@ export async function grantAccess(
   role: 'Manager' | 'Member'
 ): Promise<{ success: boolean; message: string; warning?: string; claimLink?: string; actionLink?: string }> {
   try {
-    // Refresh session first to ensure we have a valid token
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    
-    if (refreshError || !refreshData.session) {
-      console.error('Session refresh error:', refreshError);
-      throw new Error('Your session has expired. Please log in again.');
+    // Try to get the current session first, then refresh if needed
+    let session = (await supabase.auth.getSession()).data.session;
+
+    if (!session) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        console.error('Session refresh error:', refreshError);
+        throw new Error('Your session has expired. Please log in again.');
+      }
+      session = refreshData.session;
     }
 
-    const session = refreshData.session;
-    console.log('✓ Session refreshed, granting access...');
-    console.log('Token length:', session.access_token.length);
+    console.log('✓ Session available, granting access...');
     console.log('User:', session.user.email);
 
     // Call the grant-access Edge Function
@@ -370,14 +374,16 @@ export async function grantAccess(
  */
 export async function claimAccess(token: string): Promise<{ success: boolean; message: string }> {
   try {
-    // Refresh session first to ensure we have a valid token
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    
-    if (refreshError || !refreshData.session) {
-      throw new Error('Your session has expired. Please sign in again to claim access.');
-    }
+    // Try to get the current session first, then refresh if needed
+    let session = (await supabase.auth.getSession()).data.session;
 
-    const session = refreshData.session;
+    if (!session) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        throw new Error('Your session has expired. Please sign in again to claim access.');
+      }
+      session = refreshData.session;
+    }
 
     // Call the claim-access Edge Function
     const response = await fetch(

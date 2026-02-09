@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Login } from './components/Login';
 import { ClaimAccess } from './components/ClaimAccess';
 import { Sidebar } from './components/Sidebar';
@@ -386,11 +386,13 @@ const saveAlumniAddressLink = async (
 };
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem('tbi_logged_in') === 'true');
+  const [isAuthLoading, setIsAuthLoading] = useState(() => sessionStorage.getItem('tbi_logged_in') !== 'true');
   const [showClaimAccess, setShowClaimAccess] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const dataLoadedRef = useRef(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
@@ -419,32 +421,48 @@ export default function App() {
     }
   }, []);
 
+  // Helper to update login state and persist to sessionStorage
+  const setLoggedIn = (value: boolean) => {
+    setIsLoggedIn(value);
+    if (value) {
+      sessionStorage.setItem('tbi_logged_in', 'true');
+    } else {
+      sessionStorage.removeItem('tbi_logged_in');
+    }
+  };
+
   // Keep UI auth state in sync with Supabase session (Google OAuth, etc.)
   useEffect(() => {
     let isMounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
+      const hasSession = !!data.session;
+      console.log('🔐 Session check:', hasSession ? 'Session found' : 'No session');
+      setLoggedIn(hasSession);
+      setIsAuthLoading(false);
+      if (data.session) {
+        linkMyAccountToTeam().catch((err) => {
+          console.warn('Could not auto-link on session restore:', err);
+        });
+      }
+    }).catch((err) => {
+      console.error('🔐 Session check failed:', err);
       if (isMounted) {
-        setIsLoggedIn(!!data.session);
-        // Auto-link user to team if logged in
-        if (data.session) {
-          linkMyAccountToTeam().catch((err) => {
-            console.warn('Could not auto-link on session restore:', err);
-          });
-        }
+        setIsAuthLoading(false);
       }
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (isMounted) {
-        setIsLoggedIn(!!session);
-        // Auto-link user to team when auth state changes (e.g., after OAuth)
-        if (session) {
-          try {
-            await linkMyAccountToTeam();
-          } catch (err) {
-            console.warn('Could not auto-link on auth change:', err);
-          }
+      if (!isMounted) return;
+      console.log('🔐 Auth state changed:', _event, !!session);
+      setLoggedIn(!!session);
+      setIsAuthLoading(false);
+      if (session) {
+        try {
+          await linkMyAccountToTeam();
+        } catch (err) {
+          console.warn('Could not auto-link on auth change:', err);
         }
       }
     });
@@ -827,84 +845,70 @@ export default function App() {
     console.log('✅ Event marked as inactive (soft deleted):', numericEventId);
   };
 
-  useEffect(() => {
-    if (!isLoggedIn) return;
+  const loadAllData = async () => {
+    setIsSyncing(true);
+    setSyncError(null);
 
-    let isMounted = true;
+    try {
+      console.log('🔄 Starting to fetch data from Supabase...');
 
-    const loadData = async () => {
-      setIsSyncing(true);
-      setSyncError(null);
+      const results = await Promise.allSettled([
+        fetchContactsFromSupabase(),
+        fetchEventsFromSupabase(),
+        fetchArchivedContactsFromSupabase(),
+        fetchArchivedEventsFromSupabase(),
+        fetchArchivedTeamMembersFromSupabase(),
+      ]);
 
-      try {
-        console.log('🔄 Starting to fetch data from Supabase...');
-        
-        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams] = await Promise.all([
-          fetchContactsFromSupabase(),
-          fetchEventsFromSupabase(),
-          fetchArchivedContactsFromSupabase(),
-          fetchArchivedEventsFromSupabase(),
-          fetchArchivedTeamMembersFromSupabase(),
-        ]);
+      const labels = ['Contacts', 'Events', 'Archived Contacts', 'Archived Events', 'Archived Team Members'];
+      const failedSources: string[] = [];
 
-        console.log('✅ Data fetched successfully!');
-        console.log('  - Contacts:', loadedContacts.length);
-        console.log('  - Events:', loadedEvents.length);
-        console.log('  - Archived Contacts:', loadedArchivedContacts.length);
-        console.log('  - Archived Events:', loadedArchivedEvents.length);
-        console.log('  - Archived Team Members:', loadedArchivedTeams.length);
-
-        if (!isMounted) return;
-
-        if (loadedContacts.length > 0) {
-          setContacts(loadedContacts);
-          console.log('✅ Contacts state updated');
-        } else {
-          console.log('⚠️ No contacts found in database');
+      results.forEach((result, idx) => {
+        if (result.status === 'rejected') {
+          console.error(`❌ Failed to load ${labels[idx]}:`, result.reason);
+          failedSources.push(labels[idx]);
         }
+      });
 
-        setEvents(loadedEvents);
-        console.log('✅ Events state updated');
-        
-        setArchivedContacts(loadedArchivedContacts);
-        console.log('✅ Archived contacts state updated');
-        
-        setArchivedEvents(loadedArchivedEvents);
-        console.log('✅ Archived events state updated');
+      const loadedContacts = results[0].status === 'fulfilled' ? results[0].value : [];
+      const loadedEvents = results[1].status === 'fulfilled' ? results[1].value : [];
+      const loadedArchivedContacts = results[2].status === 'fulfilled' ? results[2].value : [];
+      const loadedArchivedEvents = results[3].status === 'fulfilled' ? results[3].value : [];
+      const loadedArchivedTeams = results[4].status === 'fulfilled' ? results[4].value : [];
 
-        setArchivedTeamMembers(loadedArchivedTeams);
-        console.log('✅ Archived team members state updated');
-      } catch (error) {
-        console.error('❌ Supabase: failed to load data', error);
-        console.error('Error details:', {
-          message: error instanceof Error ? error.message : 'Unknown error',
-          code: (error as any)?.code,
-          details: (error as any)?.details,
-          hint: (error as any)?.hint,
-          fullError: error,
-        });
-        
-        // Show more specific error message
-        const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
-        const specificError = `Unable to load data from Supabase: ${errorMsg}`;
-        
-        console.error('📋 Full error object:', error);
-        
-        if (isMounted) {
-          setSyncError(specificError);
-        }
-      } finally {
-        if (isMounted) {
-          setIsSyncing(false);
-        }
+      console.log('✅ Data fetch completed');
+      console.log('  - Contacts:', loadedContacts.length);
+      console.log('  - Events:', loadedEvents.length);
+      console.log('  - Archived Contacts:', loadedArchivedContacts.length);
+      console.log('  - Archived Events:', loadedArchivedEvents.length);
+      console.log('  - Archived Team Members:', loadedArchivedTeams.length);
+
+      setContacts(loadedContacts);
+      setEvents(loadedEvents);
+      setArchivedContacts(loadedArchivedContacts);
+      setArchivedEvents(loadedArchivedEvents);
+      setArchivedTeamMembers(loadedArchivedTeams);
+      dataLoadedRef.current = true;
+
+      if (failedSources.length > 0) {
+        setSyncError(`Some data could not be loaded: ${failedSources.join(', ')}.`);
       }
-    };
+    } catch (error) {
+      console.error('❌ Unexpected error during data load:', error);
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+      setSyncError(`Unable to load data: ${errorMsg}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
-    loadData();
-
-    return () => {
-      isMounted = false;
-    };
+  // Load data on mount (anon key has read access) and whenever user becomes logged in
+  useEffect(() => {
+    // Always load data — the anon key can read all tables
+    // Skip if we already loaded successfully to avoid double-fetch
+    if (dataLoadedRef.current) return;
+    console.log('📦 useEffect: triggering loadAllData, isLoggedIn =', isLoggedIn);
+    loadAllData();
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -960,7 +964,9 @@ export default function App() {
   }, [activeTab, isLoggedIn]);
 
   const handleLogin = () => {
-    setIsLoggedIn(true);
+    setLoggedIn(true);
+    // Reset ref so data loads again
+    dataLoadedRef.current = false;
   };
 
   const handleLogout = async () => {
@@ -977,7 +983,8 @@ export default function App() {
     }
 
     // Clear all state
-    setIsLoggedIn(false);
+    setLoggedIn(false);
+    dataLoadedRef.current = false;
     setActiveTab('home');
     setShowForm(false);
     setEditingContact(null);
@@ -1432,6 +1439,18 @@ export default function App() {
     return matchesQuery && matchesDate;
   });
 
+  // Show loading screen while checking auth session
+  if (isAuthLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#F5F1ED]">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-[#FF2B5E]" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show login page if not logged in
   if (!isLoggedIn && !showClaimAccess) {
     return <Login onLogin={handleLogin} />;
@@ -1441,7 +1460,8 @@ export default function App() {
   if (showClaimAccess) {
     return <ClaimAccess onSuccess={() => {
       setShowClaimAccess(false);
-      setIsLoggedIn(true);
+      setLoggedIn(true);
+      dataLoadedRef.current = false;
       // Clear token from URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }} />;
@@ -1453,12 +1473,6 @@ export default function App() {
       
       <main className="flex-1 overflow-auto">
         <div className="max-w-[1400px] mx-auto p-8">
-          {isSyncing && (
-            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              Syncing with Supabase...
-            </div>
-          )}
-
           {syncError && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {syncError}

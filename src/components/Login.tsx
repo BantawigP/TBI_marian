@@ -44,6 +44,11 @@ export function Login({ onLogin }: LoginProps) {
   const handleGoogle = async () => {
     setError(null);
     setGoogleLoading(true);
+
+    // Mark that a Google OAuth flow is starting so App.tsx can
+    // verify the email against the teams table after OAuth completes.
+    localStorage.setItem('pending_google_oauth', 'true');
+
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -52,6 +57,7 @@ export function Login({ onLogin }: LoginProps) {
     });
 
     if (authError) {
+      localStorage.removeItem('pending_google_oauth');
       setError(authError.message ?? 'Google sign-in failed.');
       setGoogleLoading(false);
     }

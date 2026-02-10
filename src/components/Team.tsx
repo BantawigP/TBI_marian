@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key } from 'lucide-react';
 import type { TeamMember, TeamRole } from '../types';
 import { fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember, grantAccess } from '../lib/teamService';
@@ -551,8 +552,8 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       )}
 
       {/* Add Member Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      {showAddModal && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Add Team Member</h2>
@@ -662,11 +663,12 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Edit Member Modal */}
-      {editingMember && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      {editingMember && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Edit Team Member</h2>
@@ -776,7 +778,8 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <PopupDialog

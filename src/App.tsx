@@ -16,6 +16,7 @@ import { ExportContact } from './components/ExportContact';
 import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
+import { PopupDialog } from './components/PopupDialog';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
@@ -409,6 +410,15 @@ export default function App() {
   const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    tone?: 'primary' | 'danger' | 'neutral' | 'success';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
   const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
   const [isRoleLoading, setIsRoleLoading] = useState(false);
@@ -488,6 +498,23 @@ export default function App() {
       setActiveTab('home');
     }
   }, [activeTab, currentUserRole]);
+
+  const openConfirm = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel'>) =>
+    new Promise<boolean>((resolve) => {
+      setDialog({
+        ...config,
+        cancelLabel: config.cancelLabel ?? 'Cancel',
+        confirmLabel: config.confirmLabel ?? 'Confirm',
+        onConfirm: () => {
+          resolve(true);
+          setDialog(null);
+        },
+        onCancel: () => {
+          resolve(false);
+          setDialog(null);
+        },
+      });
+    });
 
   const isMemberPath = window.location.pathname === '/member';
 
@@ -1164,35 +1191,42 @@ export default function App() {
     }
   };
 
-  const handleDeleteEvent = (eventId: string) => {
+  const handleDeleteEvent = async (eventId: string) => {
     console.log('🗑️ Delete event requested:', eventId);
-    
-    if (confirm(`Are you sure you want to delete this event?`)) {
-      console.log('✅ User confirmed deletion');
-      
-      const eventToArchive = events.find((e) => e.id === eventId);
-      console.log('Event to archive:', eventToArchive);
-      console.log('Current archived events:', archivedEvents.length);
-      
-      if (eventToArchive) {
-        const updatedArchive = [...archivedEvents, eventToArchive];
-        setArchivedEvents(updatedArchive);
-        console.log('✅ Event added to archive. New archive count:', updatedArchive.length);
-      } else {
-        console.warn('⚠️ Event not found in events list');
-      }
-      
-      const updatedEvents = events.filter((e) => e.id !== eventId);
-      setEvents(updatedEvents);
-      console.log('✅ Event removed from active list. Remaining events:', updatedEvents.length);
+    const confirmed = await openConfirm({
+      title: 'Delete event',
+      message: 'Are you sure you want to delete this event?',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
 
-      deleteEventFromSupabase(eventId).catch((error) => {
-        console.error('❌ Failed to mark event as inactive in database', error);
-        setSyncError('Event archived locally but failed to update in database.');
-      });
-    } else {
+    if (!confirmed) {
       console.log('❌ User cancelled deletion');
+      return;
     }
+
+    console.log('✅ User confirmed deletion');
+
+    const eventToArchive = events.find((e) => e.id === eventId);
+    console.log('Event to archive:', eventToArchive);
+    console.log('Current archived events:', archivedEvents.length);
+
+    if (eventToArchive) {
+      const updatedArchive = [...archivedEvents, eventToArchive];
+      setArchivedEvents(updatedArchive);
+      console.log('✅ Event added to archive. New archive count:', updatedArchive.length);
+    } else {
+      console.warn('⚠️ Event not found in events list');
+    }
+
+    const updatedEvents = events.filter((e) => e.id !== eventId);
+    setEvents(updatedEvents);
+    console.log('✅ Event removed from active list. Remaining events:', updatedEvents.length);
+
+    deleteEventFromSupabase(eventId).catch((error) => {
+      console.error('❌ Failed to mark event as inactive in database', error);
+      setSyncError('Event archived locally but failed to update in database.');
+    });
   };
 
   const handleImportContacts = (importedContacts: Contact[]) => {
@@ -1782,6 +1816,16 @@ export default function App() {
           </div>
         </div>
       )}
+      <PopupDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        confirmLabel={dialog?.confirmLabel}
+        cancelLabel={dialog?.cancelLabel}
+        tone={dialog?.tone}
+        onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+        onCancel={dialog?.onCancel}
+      />
     </div>
   );
 }

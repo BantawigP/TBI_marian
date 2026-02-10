@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Edge Function: preauth-check
 // Checks whether an email is pre-authorized (exists as an active member in public.teams).
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";

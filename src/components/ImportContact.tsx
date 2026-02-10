@@ -4,6 +4,7 @@ import type { Contact, ContactStatus } from '../types';
 import type { ParseResult } from 'papaparse';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { PopupDialog } from './PopupDialog';
 
 interface ImportContactProps {
   onClose: () => void;
@@ -13,6 +14,23 @@ interface ImportContactProps {
 export function ImportContact({ onClose, onImport }: ImportContactProps) {
   const [previewData, setPreviewData] = useState<Contact[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    tone?: 'primary' | 'danger' | 'neutral' | 'success';
+    onConfirm: () => void;
+  } | null>(null);
+
+  const openAlert = (title: string, message: string, tone: 'primary' | 'danger' | 'neutral' | 'success' = 'neutral') => {
+    setDialog({
+      title,
+      message,
+      tone,
+      confirmLabel: 'OK',
+      onConfirm: () => setDialog(null),
+    });
+  };
   const mapStatus = (raw?: string | null): ContactStatus => {
     const v = (raw || '').trim().toLowerCase();
     if (v === 'verified' || v === 'true' || v === '1') return 'Verified';
@@ -107,13 +125,17 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
     try {
       const contacts = await parseFile(file);
       if (!contacts.length) {
-        alert('No valid contacts found in the file. Please check the headers and data.');
+        openAlert('No valid contacts', 'No valid contacts found in the file. Please check the headers and data.');
         return;
       }
       setPreviewData(contacts);
     } catch (error) {
       console.error('Failed to parse file', error);
-      alert('Failed to read file. Please ensure it is a valid CSV or Excel file with the required columns.');
+      openAlert(
+        'Import failed',
+        'Failed to read file. Please ensure it is a valid CSV or Excel file with the required columns.',
+        'danger'
+      );
     }
   };
 
@@ -136,13 +158,17 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
     try {
       const contacts = await parseFile(file);
       if (!contacts.length) {
-        alert('No valid contacts found in the file. Please check the headers and data.');
+        openAlert('No valid contacts', 'No valid contacts found in the file. Please check the headers and data.');
         return;
       }
       setPreviewData(contacts);
     } catch (error) {
       console.error('Failed to parse dropped file', error);
-      alert('Failed to read dropped file. Please ensure it is a valid CSV or Excel file with the required columns.');
+      openAlert(
+        'Import failed',
+        'Failed to read dropped file. Please ensure it is a valid CSV or Excel file with the required columns.',
+        'danger'
+      );
     }
   };
 
@@ -330,6 +356,14 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
           </button>
         </div>
       </div>
+      <PopupDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        confirmLabel={dialog?.confirmLabel}
+        tone={dialog?.tone}
+        onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+      />
     </div>
   );
 }

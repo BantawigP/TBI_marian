@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key } from 'lucide-react';
 import type { TeamMember, TeamRole } from '../types';
-import { fetchTeamMembers, createTeamMember, deleteTeamMember, grantAccess } from '../lib/teamService';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember, grantAccess } from '../lib/teamService';
 import { PopupDialog } from './PopupDialog';
 
 interface TeamProps {
@@ -33,6 +33,14 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     role: 'Member' as TeamRole,
     department: '',
     joinedDate: '',
+  });
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    role: 'Member' as TeamRole,
+    department: '',
   });
 
   // Load team members on mount
@@ -146,6 +154,46 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     } catch (err) {
       console.error('Error deleting team member:', err);
       setError('Failed to delete team member');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditModal = (member: TeamMember) => {
+    setEditingMember(member);
+    setEditForm({
+      firstName: member.firstName,
+      lastName: member.lastName,
+      phone: member.phone || '',
+      role: member.role,
+      department: member.department || '',
+    });
+  };
+
+  const handleEditMember = async () => {
+    if (!editingMember || !editForm.firstName || !editForm.lastName) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      await updateTeamMember(editingMember.id, {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        phone: editForm.phone || undefined,
+        role: editForm.role,
+        department: editForm.department || undefined,
+      });
+      await loadTeamMembers();
+      openAlert({
+        title: 'Member updated',
+        message: `${editForm.firstName} ${editForm.lastName} has been updated successfully.`,
+        tone: 'success',
+      });
+      setEditingMember(null);
+    } catch (err) {
+      console.error('Error updating team member:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update team member';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -454,7 +502,7 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
                   ) : null}
                   
                   <button
-                    onClick={() => {}}
+                    onClick={() => openEditModal(member)}
                     disabled={loading}
                     className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
                   >
@@ -616,6 +664,121 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
           </div>
         </div>
       )}
+      {/* Edit Member Modal */}
+      {editingMember && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Team Member</h2>
+              <button
+                onClick={() => setEditingMember(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  value={editForm.firstName}
+                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter first name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  value={editForm.lastName}
+                  onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter last name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editingMember.email}
+                  disabled
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-400">Email cannot be changed</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="+63 XXX XXX XXXX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  value={editForm.department}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter department"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Role *
+                </label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value as TeamRole })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setEditingMember(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditMember}
+                disabled={!editForm.firstName || !editForm.lastName || loading}
+                className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6265A] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <PopupDialog
         open={!!dialog}
         title={dialog?.title ?? ''}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key } from 'lucide-react';
 import type { TeamMember, TeamRole } from '../types';
 import { fetchTeamMembers, createTeamMember, deleteTeamMember, grantAccess } from '../lib/teamService';
+import { PopupDialog } from './PopupDialog';
 
 interface TeamProps {
   refreshToken?: number;
@@ -15,6 +16,15 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    tone?: 'primary' | 'danger' | 'neutral' | 'success';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
   const [newMember, setNewMember] = useState({
     firstName: '',
     lastName: '',
@@ -47,6 +57,31 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     }
   };
 
+  const openConfirm = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel'>) =>
+    new Promise<boolean>((resolve) => {
+      setDialog({
+        ...config,
+        cancelLabel: config.cancelLabel ?? 'Cancel',
+        confirmLabel: config.confirmLabel ?? 'Confirm',
+        onConfirm: () => {
+          resolve(true);
+          setDialog(null);
+        },
+        onCancel: () => {
+          resolve(false);
+          setDialog(null);
+        },
+      });
+    });
+
+  const openAlert = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel' | 'cancelLabel'>) => {
+    setDialog({
+      ...config,
+      confirmLabel: config.confirmLabel ?? 'OK',
+      onConfirm: () => setDialog(null),
+    });
+  };
+
   const handleAddMember = async () => {
     if (!newMember.firstName || !newMember.lastName || !newMember.email) return;
 
@@ -65,7 +100,11 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
         avatarColor: '#FF2B5E',
       });
       await loadTeamMembers();
-      alert(`Member added successfully: ${createdMember.name}`);
+      openAlert({
+        title: 'Member added',
+        message: `Member added successfully: ${createdMember.name}`,
+        tone: 'success',
+      });
       setShowAddModal(false);
       setNewMember({
         firstName: '',
@@ -86,7 +125,13 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
   };
 
   const handleDeleteMember = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove ${name} from the team?`)) return;
+    const confirmed = await openConfirm({
+      title: 'Remove team member',
+      message: `Are you sure you want to remove ${name} from the team?`,
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     const archivedCandidate = teamMembers.find((m) => m.id === id);
 
@@ -117,9 +162,13 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       return;
     }
 
-    if (!confirm(`Send access invitation to ${member.name} (${member.email})?`)) {
-      return;
-    }
+    const confirmed = await openConfirm({
+      title: 'Send access invitation',
+      message: `Send access invitation to ${member.name} (${member.email})?`,
+      confirmLabel: 'Send invite',
+      tone: 'primary',
+    });
+    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -128,15 +177,26 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       
       if (result.warning && result.actionLink) {
         // Email couldn't be sent due to Resend limitations - show the link
-        const copyLink = confirm(
-          `${result.message}\n\nWould you like to copy the magic link to share manually?`
-        );
+        const copyLink = await openConfirm({
+          title: 'Copy magic link?',
+          message: `${result.message}\n\nWould you like to copy the magic link to share manually?`,
+          confirmLabel: 'Copy link',
+          tone: 'primary',
+        });
         if (copyLink) {
           await navigator.clipboard.writeText(result.actionLink);
-          alert('Magic link copied to clipboard!\n\nShare this link with ' + member.email);
+          openAlert({
+            title: 'Magic link copied',
+            message: `Magic link copied to clipboard!\n\nShare this link with ${member.email}`,
+            tone: 'success',
+          });
         }
       } else {
-        alert(result.message + '\n\nA magic link has been sent to ' + member.email);
+        openAlert({
+          title: 'Access invited',
+          message: `${result.message}\n\nA magic link has been sent to ${member.email}`,
+          tone: 'success',
+        });
       }
       await loadTeamMembers(); // Reload to update has_access status
     } catch (err) {
@@ -556,6 +616,16 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
           </div>
         </div>
       )}
+      <PopupDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        confirmLabel={dialog?.confirmLabel}
+        cancelLabel={dialog?.cancelLabel}
+        tone={dialog?.tone}
+        onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+        onCancel={dialog?.onCancel}
+      />
     </div>
   );
 }

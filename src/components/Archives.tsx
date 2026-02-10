@@ -1,6 +1,7 @@
 import { Users, Calendar, RotateCcw, Trash2, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { Contact, Event, TeamMember } from '../types';
+import { PopupDialog } from './PopupDialog';
 
 interface ArchivesProps {
   archivedContacts: Contact[];
@@ -26,6 +27,32 @@ export function Archives({
   onPermanentDeleteTeamMember,
 }: ArchivesProps) {
   const [activeTab, setActiveTab] = useState<'contacts' | 'events' | 'team'>('contacts');
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    tone?: 'primary' | 'danger' | 'neutral' | 'success';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
+
+  const openConfirm = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel'>) =>
+    new Promise<boolean>((resolve) => {
+      setDialog({
+        ...config,
+        cancelLabel: config.cancelLabel ?? 'Cancel',
+        confirmLabel: config.confirmLabel ?? 'Confirm',
+        onConfirm: () => {
+          resolve(true);
+          setDialog(null);
+        },
+        onCancel: () => {
+          resolve(false);
+          setDialog(null);
+        },
+      });
+    });
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -36,50 +63,71 @@ export function Archives({
     });
   };
 
-  const handleRestoreContact = (contact: Contact) => {
-    if (confirm(`Restore ${contact.name}?`)) {
+  const handleRestoreContact = async (contact: Contact) => {
+    const confirmed = await openConfirm({
+      title: 'Restore contact',
+      message: `Restore ${contact.name}?`,
+      tone: 'primary',
+    });
+    if (confirmed) {
       onRestoreContact(contact);
     }
   };
 
-  const handleRestoreEvent = (event: Event) => {
-    if (confirm(`Restore event "${event.title}"?`)) {
+  const handleRestoreEvent = async (event: Event) => {
+    const confirmed = await openConfirm({
+      title: 'Restore event',
+      message: `Restore event "${event.title}"?`,
+      tone: 'primary',
+    });
+    if (confirmed) {
       onRestoreEvent(event);
     }
   };
 
-  const handlePermanentDeleteContact = (contactId: string, contactName: string) => {
-    if (
-      confirm(
-        `Permanently delete ${contactName}? This action cannot be undone.`
-      )
-    ) {
+  const handlePermanentDeleteContact = async (contactId: string, contactName: string) => {
+    const confirmed = await openConfirm({
+      title: 'Permanently delete contact',
+      message: `Permanently delete ${contactName}? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (confirmed) {
       onPermanentDeleteContact(contactId);
     }
   };
 
-  const handlePermanentDeleteEvent = (eventId: string, eventTitle: string) => {
-    if (
-      confirm(
-        `Permanently delete "${eventTitle}"? This action cannot be undone.`
-      )
-    ) {
+  const handlePermanentDeleteEvent = async (eventId: string, eventTitle: string) => {
+    const confirmed = await openConfirm({
+      title: 'Permanently delete event',
+      message: `Permanently delete "${eventTitle}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (confirmed) {
       onPermanentDeleteEvent(eventId);
     }
   };
 
-  const handleRestoreTeamMember = (member: TeamMember) => {
-    if (confirm(`Restore ${member.name}?`)) {
+  const handleRestoreTeamMember = async (member: TeamMember) => {
+    const confirmed = await openConfirm({
+      title: 'Restore team member',
+      message: `Restore ${member.name}?`,
+      tone: 'primary',
+    });
+    if (confirmed) {
       onRestoreTeamMember(member);
     }
   };
 
-  const handlePermanentDeleteTeamMember = (memberId: string, memberName: string) => {
-    if (
-      confirm(
-        `Permanently delete ${memberName}? This action cannot be undone.`
-      )
-    ) {
+  const handlePermanentDeleteTeamMember = async (memberId: string, memberName: string) => {
+    const confirmed = await openConfirm({
+      title: 'Permanently delete team member',
+      message: `Permanently delete ${memberName}? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (confirmed) {
       onPermanentDeleteTeamMember(memberId);
     }
   };
@@ -107,9 +155,18 @@ export function Archives({
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Summary Cards (Clickable) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('contacts')}
+          className={`text-left rounded-xl p-6 border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF2B5E] ${
+            activeTab === 'contacts'
+              ? 'bg-white border-[#FF2B5E]/40 shadow-sm'
+              : 'bg-white border-gray-200 hover:border-gray-300'
+          }`}
+          aria-pressed={activeTab === 'contacts'}
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 text-[#FF2B5E]" />
@@ -119,9 +176,18 @@ export function Archives({
             </h3>
           </div>
           <p className="text-sm text-gray-600">Archived Contacts</p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('events')}
+          className={`text-left rounded-xl p-6 border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF2B5E] ${
+            activeTab === 'events'
+              ? 'bg-white border-[#FF2B5E]/40 shadow-sm'
+              : 'bg-white border-gray-200 hover:border-gray-300'
+          }`}
+          aria-pressed={activeTab === 'events'}
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
               <Calendar className="w-5 h-5 text-purple-600" />
@@ -131,9 +197,18 @@ export function Archives({
             </h3>
           </div>
           <p className="text-sm text-gray-600">Archived Events</p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('team')}
+          className={`text-left rounded-xl p-6 border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF2B5E] ${
+            activeTab === 'team'
+              ? 'bg-white border-[#FF2B5E]/40 shadow-sm'
+              : 'bg-white border-gray-200 hover:border-gray-300'
+          }`}
+          aria-pressed={activeTab === 'team'}
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 text-gray-700" />
@@ -143,40 +218,6 @@ export function Archives({
             </h3>
           </div>
           <p className="text-sm text-gray-600">Archived Users</p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('contacts')}
-          className={`px-6 py-3 font-medium transition-colors ${
-            activeTab === 'contacts'
-              ? 'text-[#FF2B5E] border-b-2 border-[#FF2B5E]'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Contacts ({archivedContacts.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('events')}
-          className={`px-6 py-3 font-medium transition-colors ${
-            activeTab === 'events'
-              ? 'text-[#FF2B5E] border-b-2 border-[#FF2B5E]'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Events ({archivedEvents.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('team')}
-          className={`px-6 py-3 font-medium transition-colors ${
-            activeTab === 'team'
-              ? 'text-[#FF2B5E] border-b-2 border-[#FF2B5E]'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Users ({archivedTeamMembers.length})
         </button>
       </div>
 
@@ -431,6 +472,16 @@ export function Archives({
           )}
         </div>
       )}
+      <PopupDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        confirmLabel={dialog?.confirmLabel}
+        cancelLabel={dialog?.cancelLabel}
+        tone={dialog?.tone}
+        onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+        onCancel={dialog?.onCancel}
+      />
     </div>
   );
 }

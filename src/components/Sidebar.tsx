@@ -7,9 +7,22 @@ interface SidebarProps {
   onTabChange: (tab: string) => void;
   onLogout: () => void;
   currentUserRole?: TeamRole | null;
+  onOpenSettings?: () => void;
+  userName?: string;
+  userEmail?: string;
 }
 
-export function Sidebar({ activeTab, onTabChange, onLogout, currentUserRole }: SidebarProps) {
+export function Sidebar({
+  activeTab,
+  onTabChange,
+  onLogout,
+  currentUserRole,
+  onOpenSettings,
+  userName,
+  userEmail,
+}: SidebarProps) {
+  const displayName = userName?.trim() || 'User';
+  const displayEmail = userEmail?.trim() || 'user@example.com';
   const navItems = [
     { icon: Home, label: 'Home', value: 'home' },
     { icon: Users, label: 'Contacts', value: 'contacts' },
@@ -62,10 +75,31 @@ export function Sidebar({ activeTab, onTabChange, onLogout, currentUserRole }: S
       {/* User Profile Preview */}
       <div className="p-4">
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-          <div className="flex flex-col gap-1">
-            <p className="font-semibold text-white truncate">Admin User</p>
-            <p className="text-xs text-white/70 truncate">admin@mariantbi.edu</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-col gap-1 min-w-0">
+              <p className="font-semibold text-white truncate">{displayName}</p>
+              <p className="text-xs text-white/70 truncate">{displayEmail}</p>
+            </div>
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="text-white/80 hover:text-white transition-colors"
+                aria-label="Open personal settings"
+              >
+                <UserCog className="w-4 h-4" />
+              </button>
+            )}
           </div>
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="mt-3 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-medium text-white/90 hover:bg-white/20 transition-colors"
+            >
+              Personal Settings
+            </button>
+          )}
         </div>
       </div>
 

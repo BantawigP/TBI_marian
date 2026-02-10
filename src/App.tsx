@@ -27,6 +27,7 @@ import {
   restoreTeamMember,
   deleteTeamMemberPermanently,
 } from './lib/teamService';
+import { linkMyAccountToTeam } from './lib/linkAccountService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -431,11 +432,64 @@ export default function App() {
       }
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        setIsLoggedIn(!!session);
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (!isMounted) return;
+
+        if (!session) {
+          setIsLoggedIn(false);
+          return;
+        }
+
+        const isGoogleOAuth = localStorage.getItem('pending_google_oauth') === 'true';
+
+        // --- Google OAuth enforcement ---
+        // After Google OAuth, verify the signed-in email exists in the teams table.
+        // If not pre-added by admin, reject the login.
+        if (isGoogleOAuth) {
+          localStorage.removeItem('pending_google_oauth');
+
+          const googleEmail = (session.user?.email || '').toLowerCase();
+          if (!googleEmail) {
+            await supabase.auth.signOut();
+            setIsLoggedIn(false);
+            setSyncError('Could not determine email from Google account.');
+            return;
+          }
+
+          // Check directly against the teams table (no Edge Function needed)
+          const { data: teamRow, error: teamError } = await supabase
+            .from('teams')
+            .select('id, is_active')
+            .ilike('email', googleEmail)
+            .maybeSingle();
+
+          if (teamError) {
+            console.error('Teams lookup error after Google OAuth:', teamError);
+          }
+
+          const isAllowed = Boolean(teamRow?.id) && teamRow?.is_active !== false;
+
+          if (!isAllowed) {
+            await supabase.auth.signOut();
+            setIsLoggedIn(false);
+            setSyncError(
+              'This Google account is not authorized. Ask your admin to add your email to the team first.'
+            );
+            return;
+          }
+
+          // Link the auth user to their teams row (sets user_id + has_access)
+          try {
+            await linkMyAccountToTeam();
+          } catch (e) {
+            console.warn('Account linking failed (role-based features may not work):', e);
+          }
+        }
+
+        setIsLoggedIn(true);
       }
-    });
+    );
 
     return () => {
       isMounted = false;

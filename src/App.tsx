@@ -17,6 +17,7 @@ import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { PopupDialog } from './components/PopupDialog';
+import { PersonalSettings } from './components/PersonalSettings';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
 import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
@@ -423,6 +424,10 @@ export default function App() {
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
   const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
   const [isRoleLoading, setIsRoleLoading] = useState(false);
+  const [showPersonalSettings, setShowPersonalSettings] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState('');
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
   // Check if URL contains claim-access token
   useEffect(() => {
@@ -513,18 +518,34 @@ export default function App() {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData?.user) {
         setCurrentUserRole(null);
+        setCurrentUserName('');
+        setCurrentUserEmail('');
+        setHasExistingPassword(false);
         return;
       }
 
+      const authUser = userData.user;
+      const authName = (authUser.user_metadata as { full_name?: string } | undefined)?.full_name;
+      const storedAuthMethod = localStorage.getItem('auth_method');
+      const metadataHasPassword = Boolean(
+        (authUser.user_metadata as { has_password?: boolean; password_set?: boolean } | undefined)
+          ?.has_password ??
+          (authUser.user_metadata as { has_password?: boolean; password_set?: boolean } | undefined)
+            ?.password_set
+      );
+      setHasExistingPassword(storedAuthMethod === 'password' || metadataHasPassword);
+      setCurrentUserEmail(authUser.email ?? '');
+
       const { data: roleRow, error: roleError } = await supabase
         .from('teams')
-        .select('id, roles(role_name)')
+        .select('id, email, first_name, last_name, roles(role_name)')
         .eq('user_id', userData.user.id)
         .maybeSingle();
 
       if (roleError) {
         console.warn('Supabase: failed to load current user role', roleError);
         setCurrentUserRole(null);
+        setCurrentUserName(authName || authUser.email || '');
         return;
       }
 
@@ -533,6 +554,25 @@ export default function App() {
         ? rolesData[0]?.role_name ?? null
         : rolesData?.role_name ?? null;
       setCurrentUserRole((roleName as TeamRole | null) ?? null);
+
+      if (roleRow) {
+        const teamName = `${roleRow.first_name ?? ''} ${roleRow.last_name ?? ''}`.trim();
+        if (teamName) {
+          setCurrentUserName(teamName);
+        } else if (authName) {
+          setCurrentUserName(authName);
+        } else {
+          setCurrentUserName(authUser.email ?? '');
+        }
+
+        if (roleRow.email) {
+          setCurrentUserEmail(roleRow.email);
+        }
+      } else if (authName) {
+        setCurrentUserName(authName);
+      } else {
+        setCurrentUserName(authUser.email ?? '');
+      }
     } finally {
       setIsRoleLoading(false);
     }
@@ -1105,6 +1145,11 @@ export default function App() {
     setShowCreateEvent(false);
     setViewingEvent(null);
     setShowDeleteConfirm(false);
+    setShowPersonalSettings(false);
+    setCurrentUserName('');
+    setCurrentUserEmail('');
+    setHasExistingPassword(false);
+    localStorage.removeItem('auth_method');
   };
 
   const handleReset = () => {
@@ -1621,6 +1666,9 @@ export default function App() {
         onTabChange={setActiveTab}
         onLogout={handleLogout}
         currentUserRole={currentUserRole}
+        onOpenSettings={() => setShowPersonalSettings(true)}
+        userName={currentUserName}
+        userEmail={currentUserEmail}
       />
       
       <main className="flex-1 overflow-auto">
@@ -1818,6 +1866,19 @@ export default function App() {
           contacts={contacts}
           selectedContacts={selectedContacts}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showPersonalSettings && (
+        <PersonalSettings
+          onClose={() => setShowPersonalSettings(false)}
+          userName={currentUserName}
+          userEmail={currentUserEmail}
+          hasExistingPassword={hasExistingPassword}
+          onPasswordUpdated={() => {
+            setHasExistingPassword(true);
+            localStorage.setItem('auth_method', 'password');
+          }}
         />
       )}
 

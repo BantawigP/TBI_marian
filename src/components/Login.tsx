@@ -32,6 +32,7 @@ export function Login({ onLogin }: LoginProps) {
       }
 
       if (data.session) {
+        localStorage.setItem('auth_method', 'password');
         onLogin();
       } else {
         setError('Sign in did not return a session. Please try again.');
@@ -48,6 +49,7 @@ export function Login({ onLogin }: LoginProps) {
     // Mark that a Google OAuth flow is starting so App.tsx can
     // verify the email against the teams table after OAuth completes.
     localStorage.setItem('pending_google_oauth', 'true');
+    localStorage.setItem('auth_method', 'oauth');
 
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',

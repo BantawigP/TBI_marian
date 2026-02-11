@@ -1716,6 +1716,7 @@ export default function App() {
             <Team
               refreshToken={teamRefreshToken}
               onArchived={handleArchiveTeamMemberLocal}
+              currentUserRole={currentUserRole}
             />
           ) : activeTab === 'preview' ? (
             <FormPreview />

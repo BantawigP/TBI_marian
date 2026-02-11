@@ -19,8 +19,8 @@ const corsHeaders = {
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const DEFAULT_FROM = Deno.env.get("RESEND_FROM") || "Marian Alumni <no-reply@mariantbi.uic.edu.ph>";
-// Default APP_URL to the Vercel domain; override via secret for dev/staging.
-const APP_URL = (Deno.env.get("APP_URL") || "https://tbi-marian.vercel.app").replace(/\/$/, "");
+// Default APP_URL to localhost for dev; override via secret in prod.
+const APP_URL = (Deno.env.get("APP_URL") || "http://localhost:5173").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 

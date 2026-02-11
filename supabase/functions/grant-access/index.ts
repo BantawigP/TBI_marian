@@ -45,7 +45,7 @@ const DEFAULT_FROM = normalizeFrom(DEFAULT_FROM_ENV) || DEFAULT_FROM_FALLBACK;
 if (DEFAULT_FROM_ENV && !normalizeFrom(DEFAULT_FROM_ENV)) {
   console.warn("Invalid RESEND_FROM format. Falling back to default email-only sender.");
 }
-const APP_URL = (Deno.env.get("APP_URL") || "https://tbi-marian.vercel.app").replace(/\/$/, "");
+const APP_URL = (Deno.env.get("APP_URL") || "http://localhost:5173").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 

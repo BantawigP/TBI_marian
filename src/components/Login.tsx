@@ -7,7 +7,6 @@ interface LoginProps {
 }
 
 export function Login({ onLogin }: LoginProps) {
-  const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -55,7 +54,7 @@ export function Login({ onLogin }: LoginProps) {
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${siteUrl}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 

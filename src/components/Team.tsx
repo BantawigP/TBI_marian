@@ -8,9 +8,10 @@ import { PopupDialog } from './PopupDialog';
 interface TeamProps {
   refreshToken?: number;
   onArchived?: (member: TeamMember) => void;
+  currentUserRole?: TeamRole | null;
 }
 
-export function Team({ refreshToken, onArchived }: TeamProps) {
+export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +212,20 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
       return;
     }
 
+    // Enforce role-based grant rules
+    if (!currentUserRole) {
+      setError('Unable to determine your role. Please refresh and try again.');
+      return;
+    }
+    if (currentUserRole === 'Member') {
+      setError('Members do not have permission to grant access.');
+      return;
+    }
+    if (currentUserRole === 'Manager' && member.role !== 'Member') {
+      setError('Managers can only grant access to Members.');
+      return;
+    }
+
     const confirmed = await openConfirm({
       title: 'Send access invitation',
       message: `Send access invitation to ${member.name} (${member.email})?`,
@@ -279,6 +294,29 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
     acc[dept] = (acc[dept] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  // Role-based access control for granting access
+  // Admin can grant to Manager & Member; Manager can grant to Member only; Member cannot grant
+  const canGrantAccess = (targetMember: TeamMember): boolean => {
+    if (!currentUserRole) return false;
+    if (targetMember.hasAccess) return false;
+
+    if (currentUserRole === 'Admin') {
+      return targetMember.role === 'Manager' || targetMember.role === 'Member';
+    }
+    if (currentUserRole === 'Manager') {
+      return targetMember.role === 'Member';
+    }
+    // Member cannot grant access
+    return false;
+  };
+
+  // Determine which roles the current user can assign
+  const getAssignableRoles = (): TeamRole[] => {
+    if (currentUserRole === 'Admin') return ['Admin', 'Manager', 'Member'];
+    if (currentUserRole === 'Manager') return ['Member'];
+    return ['Member'];
+  };
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -485,8 +523,8 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
-                  {/* Show Grant Access button for Manager/Member without access */}
-                  {(member.role === 'Manager' || member.role === 'Member') && !member.hasAccess ? (
+                  {/* Show Grant Access button based on current user's role */}
+                  {canGrantAccess(member) ? (
                     <button
                       onClick={() => handleGrantAccess(member)}
                       disabled={loading}
@@ -640,9 +678,9 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
                   onChange={(e) => setNewMember({ ...newMember, role: e.target.value as TeamRole })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                 >
-                  <option value="Member">Member</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Admin">Admin</option>
+                  {getAssignableRoles().map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -755,9 +793,9 @@ export function Team({ refreshToken, onArchived }: TeamProps) {
                   onChange={(e) => setEditForm({ ...editForm, role: e.target.value as TeamRole })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                 >
-                  <option value="Member">Member</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Admin">Admin</option>
+                  {getAssignableRoles().map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
                 </select>
               </div>
             </div>

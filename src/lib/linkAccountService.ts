@@ -9,18 +9,18 @@ import { supabase } from './supabaseClient';
  *
  * If the user is already linked (user_id is set), this is a no-op.
  */
-export async function linkMyAccountToTeam(): Promise<void> {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+type AuthUser = { id: string; email?: string | null };
 
-  if (userError || !user?.email) {
-    console.warn('linkMyAccountToTeam: no authenticated user', userError);
+export async function linkMyAccountToTeam(user?: AuthUser): Promise<void> {
+  const authUser =
+    user ?? (await supabase.auth.getSession()).data.session?.user ?? null;
+
+  if (!authUser?.email) {
+    console.warn('linkMyAccountToTeam: no authenticated user');
     return;
   }
 
-  const email = user.email.toLowerCase();
+  const email = authUser.email.toLowerCase();
 
   // Find the teams row whose email matches the authenticated user
   const { data: teamRow, error: lookupError } = await supabase
@@ -41,14 +41,14 @@ export async function linkMyAccountToTeam(): Promise<void> {
   }
 
   // Already linked — nothing to do
-  if (teamRow.user_id === user.id) {
+  if (teamRow.user_id === authUser.id) {
     return;
   }
 
   // Link the auth user to the teams row and grant access
   const { error: updateError } = await supabase
     .from('teams')
-    .update({ user_id: user.id, has_access: true })
+    .update({ user_id: authUser.id, has_access: true })
     .eq('id', teamRow.id);
 
   if (updateError) {

@@ -7,10 +7,16 @@ interface LoginProps {
 }
 
 export function Login({ onLogin }: LoginProps) {
-  const [email, setEmail] = useState('');
+  const rememberedEmail =
+    localStorage.getItem('remember_me') === 'true'
+      ? localStorage.getItem('remembered_email') || ''
+      : '';
+  const [email, setEmail] = useState(rememberedEmail);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(
+    localStorage.getItem('remember_me') === 'true'
+  );
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +25,13 @@ export function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setError(null);
     setEmailLoading(true);
+    localStorage.setItem('remember_me', rememberMe ? 'true' : 'false');
+    if (rememberMe) {
+      localStorage.setItem('remembered_email', email);
+    } else {
+      localStorage.removeItem('remembered_email');
+    }
+    localStorage.setItem('login_initiated', 'true');
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -28,6 +41,7 @@ export function Login({ onLogin }: LoginProps) {
 
       if (authError) {
         setError(authError.message ?? 'Sign in failed.');
+        localStorage.removeItem('login_initiated');
         return;
       }
 
@@ -36,6 +50,7 @@ export function Login({ onLogin }: LoginProps) {
         onLogin();
       } else {
         setError('Sign in did not return a session. Please try again.');
+        localStorage.removeItem('login_initiated');
       }
     } finally {
       setEmailLoading(false);
@@ -45,6 +60,13 @@ export function Login({ onLogin }: LoginProps) {
   const handleGoogle = async () => {
     setError(null);
     setGoogleLoading(true);
+    localStorage.setItem('remember_me', rememberMe ? 'true' : 'false');
+    if (rememberMe) {
+      localStorage.setItem('remembered_email', email);
+    } else {
+      localStorage.removeItem('remembered_email');
+    }
+    localStorage.setItem('login_initiated', 'true');
 
     // Mark that a Google OAuth flow is starting so App.tsx can
     // verify the email against the teams table after OAuth completes.
@@ -63,6 +85,7 @@ export function Login({ onLogin }: LoginProps) {
 
     if (authError) {
       localStorage.removeItem('pending_google_oauth');
+      localStorage.removeItem('login_initiated');
       setError(authError.message ?? 'Google sign-in failed.');
       setGoogleLoading(false);
     }
@@ -212,7 +235,14 @@ export function Login({ onLogin }: LoginProps) {
                   <input
                     type="checkbox"
                     checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setRememberMe(next);
+                      localStorage.setItem('remember_me', next ? 'true' : 'false');
+                      if (!next) {
+                        localStorage.removeItem('remembered_email');
+                      }
+                    }}
                     className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
                   />
                   <span className="text-sm text-gray-600">Remember me</span>

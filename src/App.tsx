@@ -243,6 +243,26 @@ const noteMissingEventRsvpStatus = () => {
   console.warn('Supabase: event_participants.rsvp_status column missing, continuing without RSVP status.');
 };
 
+const deriveUserProfile = (user?: any) => {
+  if (!user) {
+    return { name: '', email: '' };
+  }
+
+  const metadata = user.user_metadata || {};
+  const identityData = user.identities?.[0]?.identity_data || {};
+  const email =
+    user.email || metadata.email || metadata.preferred_email || identityData.email || '';
+  const name =
+    metadata.full_name ||
+    metadata.name ||
+    [metadata.given_name, metadata.family_name].filter(Boolean).join(' ') ||
+    identityData.name ||
+    email ||
+    '';
+
+  return { name, email };
+};
+
 const getContactSelect = () =>
   supportsAlumniAddressColumn ? CONTACT_SELECT_WITH_ADDRESS : CONTACT_SELECT_BASE;
 
@@ -441,10 +461,25 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (isMounted) {
-        setIsLoggedIn(!!data.session);
+    const rememberMe = () => localStorage.getItem('remember_me') === 'true';
+    const loginInitiated = () => localStorage.getItem('login_initiated') === 'true';
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!isMounted) return;
+
+      if (data.session && !rememberMe() && !loginInitiated()) {
+        await supabase.auth.signOut();
+        setIsLoggedIn(false);
+        return;
       }
+
+      if (data.session) {
+        const { name, email } = deriveUserProfile(data.session.user);
+        setCurrentUserEmail(email);
+        setCurrentUserName(name);
+      }
+
+      setIsLoggedIn(rememberMe() ? !!data.session : false);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
@@ -455,6 +490,22 @@ export default function App() {
           setIsLoggedIn(false);
           return;
         }
+
+        const allowAutoLogin = rememberMe();
+        const hasLoginIntent = loginInitiated();
+
+        if (_event === 'INITIAL_SESSION' && !allowAutoLogin && !hasLoginIntent) {
+          setIsLoggedIn(false);
+          return;
+        }
+
+        if (hasLoginIntent) {
+          localStorage.removeItem('login_initiated');
+        }
+
+        const { name, email } = deriveUserProfile(session.user);
+        setCurrentUserEmail(email);
+        setCurrentUserName(name);
 
         const isGoogleOAuth = localStorage.getItem('pending_google_oauth') === 'true';
 
@@ -496,7 +547,7 @@ export default function App() {
 
           // Link the auth user to their teams row (sets user_id + has_access)
           try {
-            await linkMyAccountToTeam();
+            await linkMyAccountToTeam(session.user);
           } catch (e) {
             console.warn('Account linking failed (role-based features may not work):', e);
           }
@@ -515,17 +566,27 @@ export default function App() {
   const fetchCurrentUserRole = async () => {
     setIsRoleLoading(true);
     try {
+      // Try getUser first; fall back to session user (avoids AuthSessionMissingError on OAuth)
+      let authUser: any = null;
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData?.user) {
+      if (!userError && userData?.user) {
+        authUser = userData.user;
+      } else {
+        const { data: sessionData } = await supabase.auth.getSession();
+        authUser = sessionData.session?.user ?? null;
+      }
+
+      if (!authUser) {
         setCurrentUserRole(null);
-        setCurrentUserName('');
-        setCurrentUserEmail('');
+        // Only clear name/email if nothing was set yet
+        if (!currentUserName && !currentUserEmail) {
+          setCurrentUserName('');
+          setCurrentUserEmail('');
+        }
         setHasExistingPassword(false);
         return;
       }
-
-      const authUser = userData.user;
-      const authName = (authUser.user_metadata as { full_name?: string } | undefined)?.full_name;
+      const { name: derivedName, email: derivedEmail } = deriveUserProfile(authUser);
       const storedAuthMethod = localStorage.getItem('auth_method');
       const metadataHasPassword = Boolean(
         (authUser.user_metadata as { has_password?: boolean; password_set?: boolean } | undefined)
@@ -534,18 +595,46 @@ export default function App() {
             ?.password_set
       );
       setHasExistingPassword(storedAuthMethod === 'password' || metadataHasPassword);
-      setCurrentUserEmail(authUser.email ?? '');
 
-      const { data: roleRow, error: roleError } = await supabase
+      const userEmail = derivedEmail || authUser.email || '';
+      setCurrentUserEmail(userEmail);
+
+      // Try finding the teams row by user_id first, then fall back to email lookup
+      let roleRow: any = null;
+      let roleError: any = null;
+
+      const { data: byUserId, error: byUserIdError } = await supabase
         .from('teams')
         .select('id, email, first_name, last_name, roles(role_name)')
-        .eq('user_id', userData.user.id)
+        .eq('user_id', authUser.id)
         .maybeSingle();
+
+      if (!byUserIdError && byUserId) {
+        roleRow = byUserId;
+      } else {
+        // Fallback: look up by email (covers Google OAuth before user_id is linked)
+        if (userEmail) {
+          const { data: byEmail, error: byEmailError } = await supabase
+            .from('teams')
+            .select('id, email, first_name, last_name, roles(role_name)')
+            .ilike('email', userEmail)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (byEmailError) {
+            roleError = byEmailError;
+          } else {
+            roleRow = byEmail;
+          }
+        } else {
+          roleError = byUserIdError;
+        }
+      }
 
       if (roleError) {
         console.warn('Supabase: failed to load current user role', roleError);
         setCurrentUserRole(null);
-        setCurrentUserName(authName || authUser.email || '');
+        setCurrentUserName(derivedName || userEmail || '');
         return;
       }
 
@@ -559,19 +648,19 @@ export default function App() {
         const teamName = `${roleRow.first_name ?? ''} ${roleRow.last_name ?? ''}`.trim();
         if (teamName) {
           setCurrentUserName(teamName);
-        } else if (authName) {
-          setCurrentUserName(authName);
+        } else if (derivedName) {
+          setCurrentUserName(derivedName);
         } else {
-          setCurrentUserName(authUser.email ?? '');
+          setCurrentUserName(userEmail);
         }
 
         if (roleRow.email) {
           setCurrentUserEmail(roleRow.email);
         }
-      } else if (authName) {
-        setCurrentUserName(authName);
+      } else if (derivedName) {
+        setCurrentUserName(derivedName);
       } else {
-        setCurrentUserName(authUser.email ?? '');
+        setCurrentUserName(userEmail);
       }
     } finally {
       setIsRoleLoading(false);
@@ -1123,8 +1212,14 @@ export default function App() {
       });
   }, [activeTab, isLoggedIn]);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setIsLoggedIn(true);
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      const { name, email } = deriveUserProfile(data.session.user);
+      setCurrentUserEmail(email);
+      setCurrentUserName(name);
+    }
   };
 
   const handleLogout = async () => {

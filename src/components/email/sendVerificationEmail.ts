@@ -32,7 +32,7 @@ export async function sendVerificationEmail({
       brandName,
       // Only send verifyUrl if caller explicitly provided one; otherwise let the Edge Function attach the token.
       ...(verifyUrl ? { verifyUrl: finalVerifyUrl } : {}),
-      from: from || 'test@mariantbi.uic.edu.ph',
+      from: from || 'no-reply@mariantbi.uic.edu.ph',
     },
   });
 

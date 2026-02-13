@@ -1,5 +1,7 @@
-import { Calendar, Users, MapPin, Clock, Plus, Eye, Trash2, Edit } from 'lucide-react';
+import { Calendar, Users, MapPin, Clock, Plus, Eye, Trash2, Edit, CalendarDays, List } from 'lucide-react';
+import { useState } from 'react';
 import type { Event } from '../types';
+import { EventCalendar } from './EventCalendar';
 
 interface EventsProps {
   events: Event[];
@@ -10,6 +12,7 @@ interface EventsProps {
 }
 
 export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEditEvent }: EventsProps) {
+  const [view, setView] = useState<'list' | 'calendar'>('list');
 
   const upcomingEvents = events.filter(
     (event) => new Date(event.date) >= new Date()
@@ -41,15 +44,45 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEd
           <h1 className="text-3xl mb-2">Events</h1>
           <p className="text-gray-600">Manage your events and attendees</p>
         </div>
-        <button
-          onClick={onCreateEvent}
-          className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-3 rounded-lg hover:bg-[#E6275A] transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Event
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden">
+            <button
+              onClick={() => setView('list')}
+              className={`flex items-center gap-2 px-5 py-3 font-medium transition-colors ${
+                view === 'list'
+                  ? 'bg-[#FF2B5E] text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <List className="w-4 h-4" />
+              List
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`flex items-center gap-2 px-5 py-3 font-medium transition-colors border-l border-gray-300 ${
+                view === 'calendar'
+                  ? 'bg-[#FF2B5E] text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <CalendarDays className="w-4 h-4" />
+              Calendar
+            </button>
+          </div>
+          <button
+            onClick={onCreateEvent}
+            className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-3 rounded-lg hover:bg-[#E6275A] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Event
+          </button>
+        </div>
       </div>
 
+      {view === 'calendar' ? (
+        <EventCalendar events={events} onViewEvent={onViewEvent} />
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl p-6 border border-gray-200">
@@ -270,6 +303,8 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEd
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -31,6 +31,25 @@ export function PersonalSettings({
   const displayEmail = userEmail?.trim() || 'user@example.com';
   const requiresCurrentPassword = Boolean(hasExistingPassword);
 
+  const ensureActiveSession = async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn('Unable to read auth session before password update:', error.message);
+    }
+
+    if (data.session) {
+      return data.session;
+    }
+
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      console.warn('Unable to refresh auth session before password update:', refreshError.message);
+      return null;
+    }
+
+    return refreshed.session ?? null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -58,6 +77,13 @@ export function PersonalSettings({
     }
 
     setIsSubmitting(true);
+
+    const session = await ensureActiveSession();
+    if (!session) {
+      setError('Session missing or expired. Please log in again and retry.');
+      setIsSubmitting(false);
+      return;
+    }
 
     const { error: updateError } = await supabase.auth.updateUser({
       password: newPassword,

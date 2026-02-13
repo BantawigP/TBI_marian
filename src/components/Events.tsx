@@ -246,6 +246,20 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEd
                           <Edit className="w-4 h-4" />
                         </button>
                       )}
+                      {onDeleteEvent && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('🔴 Delete button clicked for past event:', event.id, event.title);
+                            onDeleteEvent(event.id);
+                          }}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete event"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
                         Completed
                       </span>

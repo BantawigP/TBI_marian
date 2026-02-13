@@ -50,6 +50,11 @@ const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
+const BATCH_SIZE = 2;
+const BATCH_DELAY_MS = 1800;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const hashToken = async (token: string) => {
   const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -202,39 +207,52 @@ serve(async (req) => {
     });
   }
 
-  // Send emails (parallel)
-  const sendResults = await Promise.all(
-    tokenRows.map(async ({ rawToken, email }) => {
-      const yesUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=going&eventId=${eventId}`;
-      const maybeUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=pending&eventId=${eventId}`;
-      const noUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=not_going&eventId=${eventId}`;
+  // Send emails in batches (2 at a time) with delay between each batch
+  const sendResults: Array<{ email: string; ok: boolean; error?: string }> = [];
 
-      const attendee = payload.attendees.find((a) => a.email === email)!;
-      const html = renderEmailHtml(payload.event, attendee, { yesUrl, maybeUrl, noUrl });
-      const text = `You're invited to ${payload.event.title}\n${formatDate(payload.event.date, payload.event.time)}\n${payload.event.location}\nYes: ${yesUrl}\nMaybe: ${maybeUrl}\nNo: ${noUrl}`;
+  for (let index = 0; index < tokenRows.length; index += BATCH_SIZE) {
+    const currentBatch = tokenRows.slice(index, index + BATCH_SIZE);
 
-      const resendRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          to: email,
-          subject: `Invitation: ${payload.event.title}`,
-          from: DEFAULT_FROM,
-          html,
-          text,
-        }),
-      });
+    const batchResults = await Promise.all(
+      currentBatch.map(async ({ rawToken, email }) => {
+        const yesUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=going&eventId=${eventId}`;
+        const maybeUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=pending&eventId=${eventId}`;
+        const noUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=not_going&eventId=${eventId}`;
 
-      if (!resendRes.ok) {
-        const body = await resendRes.text();
-        return { email, ok: false, error: body };
-      }
-      return { email, ok: true };
-    }),
-  );
+        const attendee = payload.attendees.find((a) => a.email === email)!;
+        const html = renderEmailHtml(payload.event, attendee, { yesUrl, maybeUrl, noUrl });
+        const text = `You're invited to ${payload.event.title}\n${formatDate(payload.event.date, payload.event.time)}\n${payload.event.location}\nYes: ${yesUrl}\nMaybe: ${maybeUrl}\nNo: ${noUrl}`;
+
+        const resendRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            to: email,
+            subject: `Invitation: ${payload.event.title}`,
+            from: DEFAULT_FROM,
+            html,
+            text,
+          }),
+        });
+
+        if (!resendRes.ok) {
+          const body = await resendRes.text();
+          return { email, ok: false, error: body };
+        }
+        return { email, ok: true };
+      }),
+    );
+
+    sendResults.push(...batchResults);
+
+    const hasRemaining = index + BATCH_SIZE < tokenRows.length;
+    if (hasRemaining) {
+      await sleep(BATCH_DELAY_MS);
+    }
+  }
 
   const failed = sendResults.filter((r) => !r.ok);
   if (failed.length) {

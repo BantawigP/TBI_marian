@@ -112,7 +112,7 @@ export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
       await loadTeamMembers();
       openAlert({
         title: 'Member added',
-        message: `Member added successfully: ${createdMember.name}`,
+        message: `Member added successfully, ${createdMember.name}.`,
         tone: 'success',
       });
       setShowAddModal(false);

@@ -1,5 +1,5 @@
-import { X } from 'lucide-react';
-import { useState } from 'react';
+import { X, ChevronDown } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import type { Contact, Event } from '../types';
 import { createEvent } from '../lib/eventService';
 
@@ -8,6 +8,30 @@ interface CreateEventProps {
   onClose: () => void;
   onSave: (event: Event) => void;
 }
+
+const PREDEFINED_EVENT_TITLES = [
+  'Official Commencement & Enrollment',
+  'Legal Execution (NDA & Incubation)',
+  'Initial Needs & Baseline Assessment',
+  'Info Session on Pitching',
+  'Pitching Simulation',
+  'Acceptance & Orientation',
+  'BMC Workshop',
+  'Mentorship & Technical Assistance',
+  'Capacity-Building Workshops',
+  'Business Planning Workshop',
+  'Financial Management Workshop',
+  'Digital Marketing',
+  'Effective Communication & Negotiation on Startups Workshop',
+  'info Session on DTI/Sec Registration/Business Registration',
+  'IP Orientation, IP Search, IP Drafting',
+  'Monthly Progress Reporting',
+  'Market Validation & Stakeholder Engagement',
+  'Refinement of MVP & Business Model',
+  'Final Milestone Review & Evaluation',
+  'Final Pitch to Evaluators & Mentors',
+  'Official Graduation & Certification',
+];
 
 export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
   const [formData, setFormData] = useState({
@@ -22,6 +46,20 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTitleDropdown, setShowTitleDropdown] = useState(false);
+  const titleDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (titleDropdownRef.current && !titleDropdownRef.current.contains(event.target as Node)) {
+        setShowTitleDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   console.log('CreateEvent - Available contacts:', contacts.map(c => ({
     id: c.id,
@@ -118,18 +156,47 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                 </h3>
 
                 <div className="space-y-4">
-                  <div>
+                  <div ref={titleDropdownRef} className="relative">
                     <label className="block text-sm text-[#FF2B5E] mb-2">
                       Event Title
                     </label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => handleChange('title', e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                      required
-                      placeholder="e.g., Alumni Networking Night"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => handleChange('title', e.target.value)}
+                        className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                        required
+                        placeholder="e.g., Alumni Networking Night"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTitleDropdown(!showTitleDropdown)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                        title="Select from predefined titles"
+                      >
+                        <ChevronDown className="w-5 h-5" />
+                      </button>
+                    </div>
+                    
+                    {/* Dropdown Menu */}
+                    {showTitleDropdown && (
+                      <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                        {PREDEFINED_EVENT_TITLES.map((title, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => {
+                              handleChange('title', title);
+                              setShowTitleDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                          >
+                            {title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>

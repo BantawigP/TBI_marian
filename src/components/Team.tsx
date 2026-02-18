@@ -9,9 +9,10 @@ interface TeamProps {
   refreshToken?: number;
   onArchived?: (member: TeamMember) => void;
   currentUserRole?: TeamRole | null;
+  isRoleLoading?: boolean;
 }
 
-export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
+export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading }: TeamProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -202,11 +203,6 @@ export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
   };
 
   const handleGrantAccess = async (member: TeamMember) => {
-    if (member.hasAccess) {
-      setError('This member already has system access');
-      return;
-    }
-
     if (member.role !== 'Manager' && member.role !== 'Member') {
       setError('Only Manager and Member roles can be granted access');
       return;
@@ -227,9 +223,11 @@ export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
     }
 
     const confirmed = await openConfirm({
-      title: 'Send access invitation',
-      message: `Send access invitation to ${member.name} (${member.email})?`,
-      confirmLabel: 'Send invite',
+      title: member.hasAccess ? 'Resend access invitation' : 'Send access invitation',
+      message: member.hasAccess
+        ? `${member.name} already has access but may not have received the email. Resend the invitation to ${member.email}?`
+        : `Send access invitation to ${member.name} (${member.email})?`,
+      confirmLabel: member.hasAccess ? 'Resend invite' : 'Send invite',
       tone: 'primary',
     });
     if (!confirmed) return;
@@ -299,22 +297,21 @@ export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
   // Admin can grant to Manager & Member; Manager can grant to Member only; Member cannot grant
   const canGrantAccess = (targetMember: TeamMember): boolean => {
     if (!currentUserRole) return false;
-    if (targetMember.hasAccess) return false;
-
     if (currentUserRole === 'Admin') {
       return targetMember.role === 'Manager' || targetMember.role === 'Member';
     }
     if (currentUserRole === 'Manager') {
       return targetMember.role === 'Member';
     }
-    // Member cannot grant access
     return false;
   };
 
   // Determine which roles the current user can assign
+  // While role is loading, or if unknown, show all — only admins can reach this page anyway
   const getAssignableRoles = (): TeamRole[] => {
+    if (isRoleLoading || !currentUserRole) return ['Admin', 'Manager', 'Member'];
     if (currentUserRole === 'Admin') return ['Admin', 'Manager', 'Member'];
-    if (currentUserRole === 'Manager') return ['Member'];
+    if (currentUserRole === 'Manager') return ['Manager', 'Member'];
     return ['Member'];
   };
 
@@ -528,10 +525,14 @@ export function Team({ refreshToken, onArchived, currentUserRole }: TeamProps) {
                     <button
                       onClick={() => handleGrantAccess(member)}
                       disabled={loading}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+                        member.hasAccess
+                          ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                          : 'bg-green-50 text-green-700 hover:bg-green-100'
+                      }`}
                     >
                       <Key className="w-4 h-4" />
-                      Grant Access
+                      {member.hasAccess ? 'Resend Access' : 'Grant Access'}
                     </button>
                   ) : member.hasAccess ? (
                     <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">

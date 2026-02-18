@@ -1,6 +1,6 @@
 import { X, Plus, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Contact, ContactStatus } from '../types';
+import type { Contact, ContactStatus, AlumniType } from '../types';
 import { supabase } from '../lib/supabaseClient';
 
 interface ContactFormProps {
@@ -40,10 +40,12 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     company: contact?.company || '',
     address: contact?.address || '',
     status: contact?.status || 'Unverified',
+    alumniType: contact?.alumniType,
   });
   const [autoGenerateId, setAutoGenerateId] = useState(!contact?.id);
   const [error, setError] = useState('');
   const [referenceError, setReferenceError] = useState('');
+  const [alumniTypeOptions, setAlumniTypeOptions] = useState<Array<{ id: number; name: string; slug: AlumniType }>>([]);
   const [dimensionOptions, setDimensionOptions] = useState<
     Record<DimensionKey, DimensionOption[]>
   >({
@@ -73,6 +75,35 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
   const loadReferenceData = async () => {
     setLoadingReference(true);
     setReferenceError('');
+
+    // Load alumni_types with graceful fallback
+    const FALLBACK_ALUMNI_TYPES = [
+      { id: 1, name: 'Graduate',        slug: 'graduate' as AlumniType },
+      { id: 2, name: 'Marian Graduate', slug: 'marian_graduate' as AlumniType },
+    ];
+    try {
+      const { data, error: atError } = await supabase
+        .from('alumni_types')
+        .select('id, name')
+        .order('id', { ascending: true });
+      const types = atError || !data?.length
+        ? FALLBACK_ALUMNI_TYPES
+        : data.map((t) => ({
+            id: t.id,
+            name: t.name,
+            slug: (t.name === 'Marian Graduate' ? 'marian_graduate' : 'graduate') as AlumniType,
+          }));
+      setAlumniTypeOptions(types);
+      // Pre-select Marian Graduate if no existing value
+      if (!contact?.alumniType) {
+        const mg = types.find((t) => t.slug === 'marian_graduate');
+        if (mg) setFormData((prev) => ({ ...prev, alumniType: mg.slug }));
+      }
+    } catch {
+      setAlumniTypeOptions(FALLBACK_ALUMNI_TYPES);
+      if (!contact?.alumniType)
+        setFormData((prev) => ({ ...prev, alumniType: 'marian_graduate' }));
+    }
 
     try {
       const keys = Object.keys(dimensionConfig) as DimensionKey[];
@@ -405,6 +436,28 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                       <option value="Verified">Verified</option>
                       <option value="Unverified">Unverified</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[#FF2B5E] mb-2">
+                      Alumni Type
+                    </label>
+                    <div className="flex gap-6 pt-3">
+                      {alumniTypeOptions.map((opt) => (
+                        <label key={opt.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="alumniType"
+                            value={opt.slug}
+                            checked={formData.alumniType === opt.slug}
+                            onChange={() =>
+                              setFormData((prev) => ({ ...prev, alumniType: opt.slug }))
+                            }
+                            className="w-4 h-4 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                          />
+                          <span className="text-sm text-gray-700">{opt.name}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

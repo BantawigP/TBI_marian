@@ -25,6 +25,11 @@ const dimensionConfig: Record<DimensionKey, { table: string; id: string; name: s
   occupation: { table: 'occupations', id: 'occupation_id', name: 'occupation_title' },
 };
 
+const FALLBACK_ALUMNI_TYPES = [
+  { id: 1, name: 'Graduate',         slug: 'graduate' as AlumniType },
+  { id: 2, name: 'MARIAN Graduate',  slug: 'marian_graduate' as AlumniType },
+];
+
 export function ContactForm({ contact, existingContacts, onClose, onSave }: ContactFormProps) {
   const [formData, setFormData] = useState<Contact>({
     id: contact?.id || '',
@@ -40,12 +45,12 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     company: contact?.company || '',
     address: contact?.address || '',
     status: contact?.status || 'Unverified',
-    alumniType: contact?.alumniType,
+    alumniType: contact?.alumniType ?? undefined,
   });
   const [autoGenerateId, setAutoGenerateId] = useState(!contact?.id);
   const [error, setError] = useState('');
   const [referenceError, setReferenceError] = useState('');
-  const [alumniTypeOptions, setAlumniTypeOptions] = useState<Array<{ id: number; name: string; slug: AlumniType }>>([]);
+  const alumniTypeOptions = FALLBACK_ALUMNI_TYPES;
   const [dimensionOptions, setDimensionOptions] = useState<
     Record<DimensionKey, DimensionOption[]>
   >({
@@ -55,7 +60,6 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     address: [],
     occupation: [],
   });
-  const [loadingReference, setLoadingReference] = useState(false);
   const [addingKey, setAddingKey] = useState<DimensionKey | null>(null);
 
   const handleChange = (field: keyof Contact, value: string) => {
@@ -73,37 +77,10 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
   };
 
   const loadReferenceData = async () => {
-    setLoadingReference(true);
     setReferenceError('');
 
-    // Load alumni_types with graceful fallback
-    const FALLBACK_ALUMNI_TYPES = [
-      { id: 1, name: 'Graduate',        slug: 'graduate' as AlumniType },
-      { id: 2, name: 'Marian Graduate', slug: 'marian_graduate' as AlumniType },
-    ];
-    try {
-      const { data, error: atError } = await supabase
-        .from('alumni_types')
-        .select('id, name')
-        .order('id', { ascending: true });
-      const types = atError || !data?.length
-        ? FALLBACK_ALUMNI_TYPES
-        : data.map((t) => ({
-            id: t.id,
-            name: t.name,
-            slug: (t.name === 'Marian Graduate' ? 'marian_graduate' : 'graduate') as AlumniType,
-          }));
-      setAlumniTypeOptions(types);
-      // Pre-select Marian Graduate if no existing value
-      if (!contact?.alumniType) {
-        const mg = types.find((t) => t.slug === 'marian_graduate');
-        if (mg) setFormData((prev) => ({ ...prev, alumniType: mg.slug }));
-      }
-    } catch {
-      setAlumniTypeOptions(FALLBACK_ALUMNI_TYPES);
-      if (!contact?.alumniType)
-        setFormData((prev) => ({ ...prev, alumniType: 'marian_graduate' }));
-    }
+    // alumni_types are static (Graduate / Marian Graduate) — no DB fetch needed,
+    // FALLBACK_ALUMNI_TYPES is used directly as the initial state.
 
     try {
       const keys = Object.keys(dimensionConfig) as DimensionKey[];
@@ -142,7 +119,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
       console.error('Failed to load reference data', err);
       setReferenceError('Some dropdown data failed to load. You can still add new entries.');
     } finally {
-      setLoadingReference(false);
+      // done
     }
   };
 
@@ -336,10 +313,6 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                 <div className="bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-4 py-3 text-sm mb-3">
                   {referenceError}
                 </div>
-              )}
-
-              {loadingReference && (
-                <p className="text-sm text-gray-600 mb-3">Loading dropdown options…</p>
               )}
 
               <div className="space-y-4">

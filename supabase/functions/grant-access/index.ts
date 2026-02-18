@@ -193,12 +193,9 @@ serve(async (req) => {
     });
   }
 
-  if (member.has_access === true) {
-    return new Response(JSON.stringify({ error: "Member already has access" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // Allow re-sending: if member.has_access is already true we still proceed so admin can resend
+  // the invitation email in case the first one was never received.
+  const isResend = member.has_access === true;
 
   const roleId = await getRoleIdByName(role);
 
@@ -263,15 +260,7 @@ serve(async (req) => {
     );
   }
 
-  const { error: accessUpdateError } = await supabase
-    .from("teams")
-    .update({ has_access: true, user_id: authUserId })
-    .eq("id", teamMemberId);
-
-  if (accessUpdateError) {
-    console.error("Failed to update has_access", accessUpdateError);
-  }
-
+  // Generate magic link BEFORE marking has_access so email failure doesn’t lock the admin out
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
     type: "magiclink",
     email,
@@ -282,6 +271,10 @@ serve(async (req) => {
 
   if (linkError || !linkData?.properties?.action_link) {
     console.error("Generate link error", linkError);
+    // Still mark has_access if this is a resend and auth user already exists
+    if (!isResend && authUserId) {
+      await supabase.from("teams").update({ user_id: authUserId }).eq("id", teamMemberId);
+    }
     return new Response(JSON.stringify({ error: "Failed to generate magic link" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -317,25 +310,41 @@ serve(async (req) => {
   if (!resendRes.ok) {
     const errorText = await resendRes.text();
     console.error("Resend error", errorText);
-    
+
     // Check if it's a domain verification issue (free tier limitation)
     if (errorText.includes("verify a domain") || errorText.includes("testing emails")) {
-      // Access was already granted, email just couldn't be sent
-      return new Response(JSON.stringify({ 
-        message: "Access granted successfully! However, the invitation email could not be sent due to Resend free tier limitations. Please share the magic link manually or verify a domain at resend.com/domains.",
-        warning: "Email not sent - Resend domain not verified",
-        claimLink: claimLink,
-        actionLink: actionLink
+      // Still mark has_access + link auth user even if email couldn't be sent
+      await supabase
+        .from("teams")
+        .update({ has_access: true, user_id: authUserId })
+        .eq("id", teamMemberId);
+      return new Response(JSON.stringify({
+        message: "Access granted! The invitation email could not be sent because the Resend domain is not verified (free-tier limitation). Share the magic link manually or verify a domain at resend.com/domains.",
+        warning: "Email not sent — Resend domain not verified",
+        claimLink,
+        actionLink,
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    
-    return new Response(JSON.stringify({ error: "Resend request failed", detail: errorText }), {
+
+    // Any other Resend failure: do NOT set has_access so admin can retry
+    return new Response(JSON.stringify({ error: "Failed to send invitation email", detail: errorText }), {
       status: 502,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  // Email sent successfully — now mark the member as having access
+  const { error: accessUpdateError } = await supabase
+    .from("teams")
+    .update({ has_access: true, user_id: authUserId })
+    .eq("id", teamMemberId);
+
+  if (accessUpdateError) {
+    console.error("Failed to update has_access after email send", accessUpdateError);
+    // Non-fatal: email was sent, just log the error
   }
 
   return new Response(JSON.stringify({ message: "Access invitation sent" }), {

@@ -66,7 +66,7 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
           ? 'bg-purple-100 text-purple-700 border border-purple-200'
           : 'bg-blue-100 text-blue-700 border border-blue-200'
       }`}>
-        {isMarianGrad ? 'Marian Graduate' : 'Graduate'}
+        {isMarianGrad ? 'MARIAN Graduate' : 'Graduate'}
       </span>
     );
   };
@@ -192,7 +192,7 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                 <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" /> Will participate</span>
                 <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Pending invitation</span>
                 <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Will not participate</span>
-                <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-purple-400" /> Marian Graduate</span>
+                <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-purple-400" /> MARIAN Graduate</span>
                 <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> Graduate</span>
               </div>
 

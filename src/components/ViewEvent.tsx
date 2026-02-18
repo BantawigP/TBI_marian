@@ -57,6 +57,20 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
     );
   };
 
+  const renderAlumniTypeBadge = (alumniType?: string) => {
+    if (!alumniType) return null;
+    const isMarianGrad = alumniType === 'marian_graduate';
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+        isMarianGrad
+          ? 'bg-purple-100 text-purple-700 border border-purple-200'
+          : 'bg-blue-100 text-blue-700 border border-blue-200'
+      }`}>
+        {isMarianGrad ? 'Marian Graduate' : 'Graduate'}
+      </span>
+    );
+  };
+
   // Filter only verified people who are not already attendees
   const contactedPeople = contacts.filter(
     (c) =>
@@ -178,6 +192,8 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                 <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" /> Will participate</span>
                 <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Pending invitation</span>
                 <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Will not participate</span>
+                <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-purple-400" /> Marian Graduate</span>
+                <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> Graduate</span>
               </div>
 
               {/* Add Attendees Panel */}
@@ -275,7 +291,10 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                             {attendee.email}
                           </p>
                         </div>
-                        <div className="sm:ml-4">{renderStatusBadge(attendee.rsvpStatus)}</div>
+                        <div className="sm:ml-4 flex items-center gap-2">
+                          {renderAlumniTypeBadge(attendee.alumniType)}
+                          {renderStatusBadge(attendee.rsvpStatus)}
+                        </div>
                       </div>
                     </div>
                   ))

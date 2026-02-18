@@ -19,7 +19,7 @@ import { Team } from './components/Team';
 import { PopupDialog } from './components/PopupDialog';
 import { PersonalSettings } from './components/PersonalSettings';
 import { Plus, Upload, Download, Trash2 } from 'lucide-react';
-import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember, TeamRole } from './types';
+import type { Contact, ContactStatus, Event, RsvpStatus, AlumniType, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
 import { sendEventInvites } from './lib/eventInviteService';
@@ -190,6 +190,16 @@ const mapContactRowToContact = (row: Record<string, any>): Contact => {
     occupationId: occupationId ?? undefined,
     locationId: locationId ?? undefined,
     alumniAddressId: alumniAddressId ?? undefined,
+    alumniType: (() => {
+      const typeName = row.alumni_types?.name ?? null;
+      if (typeName === 'Graduate') return 'graduate' as AlumniType;
+      if (typeName === 'Marian Graduate') return 'marian_graduate' as AlumniType;
+      // Fallback: id-based mapping when alumni_types join is unavailable
+      const typeId = row.alumni_type_id;
+      if (typeId === 1) return 'graduate' as AlumniType;
+      if (typeId === 2) return 'marian_graduate' as AlumniType;
+      return undefined;
+    })(),
   };
 };
 
@@ -222,14 +232,23 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
   };
 };
 
-const CONTACT_SELECT_BASE =
-  'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
-const CONTACT_SELECT_WITH_ADDRESS = `${CONTACT_SELECT_BASE},alumniaddress_id`;
+const CONTACT_SELECT_BASE_FULL =
+  'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,alumni_type_id,alumni_types(id,name),college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
+const CONTACT_SELECT_BASE_NO_TYPES =
+  'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,alumni_type_id,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
 
 let supportsAlumniAddressColumn = true;
+let supportsAlumniTypes = true;
 let loggedMissingAlumniAddressColumn = false;
 let supportsEventRsvpStatus = true;
 let loggedMissingEventRsvpStatus = false;
+let loggedMissingAlumniTypes = false;
+
+const noteMissingAlumniTypes = () => {
+  if (loggedMissingAlumniTypes) return;
+  loggedMissingAlumniTypes = true;
+  console.warn('Supabase: alumni_types table not found, run migration to enable — falling back to id-based mapping.');
+};
 
 const noteMissingAlumniAddressColumn = () => {
   if (loggedMissingAlumniAddressColumn) return;
@@ -263,8 +282,11 @@ const deriveUserProfile = (user?: any) => {
   return { name, email };
 };
 
+const baseContactSelect = () =>
+  supportsAlumniTypes ? CONTACT_SELECT_BASE_FULL : CONTACT_SELECT_BASE_NO_TYPES;
+
 const getContactSelect = () =>
-  supportsAlumniAddressColumn ? CONTACT_SELECT_WITH_ADDRESS : CONTACT_SELECT_BASE;
+  supportsAlumniAddressColumn ? `${baseContactSelect()},alumniaddress_id` : baseContactSelect();
 
 const hydrateContactsWithLocations = async (contacts: Contact[]): Promise<Contact[]> => {
   const locationIds = Array.from(
@@ -711,9 +733,14 @@ export default function App() {
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null');
 
-    if (error && error.code === '42703') {
-      noteMissingAlumniAddressColumn();
-      supportsAlumniAddressColumn = false;
+    if (error && (error.code === '42703' || error.message?.includes('alumni_types'))) {
+      if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
       ({ data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null'));
     }
 
@@ -728,9 +755,14 @@ export default function App() {
   const fetchArchivedContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect()).eq('is_active', false);
 
-    if (error && error.code === '42703') {
-      noteMissingAlumniAddressColumn();
-      supportsAlumniAddressColumn = false;
+    if (error && (error.code === '42703' || error.message?.includes('alumni_types'))) {
+      if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
       ({ data, error } = await supabase.from('alumni').select(getContactSelect()).eq('is_active', false));
     }
 
@@ -743,9 +775,10 @@ export default function App() {
   };
 
   function eventAlumniFields() {
+    const typeJoin = supportsAlumniTypes ? 'alumni_type_id,alumni_types(id,name),' : 'alumni_type_id,';
     return supportsAlumniAddressColumn
-      ? 'alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)'
-      : 'alumni_id,f_name,l_name,email_id,date_graduated,contact_number,college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
+      ? `alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,${typeJoin}college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)`
+      : `alumni_id,f_name,l_name,email_id,date_graduated,contact_number,${typeJoin}college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)`;
   }
 
   function eventParticipantsSelect() {
@@ -758,10 +791,13 @@ export default function App() {
     const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
     let { data, error } = await supabase.from('events').select(selectClause).or('is_active.eq.true,is_active.is.null');
 
-    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status'))) {
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status') || error.message?.includes('alumni_types'))) {
       if (error.message?.includes('rsvp_status')) {
         noteMissingEventRsvpStatus();
         supportsEventRsvpStatus = false;
+      } else if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
       } else {
         noteMissingAlumniAddressColumn();
         supportsAlumniAddressColumn = false;
@@ -782,10 +818,13 @@ export default function App() {
     const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
     let { data, error } = await supabase.from('events').select(selectClause).eq('is_active', false);
 
-    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status'))) {
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status') || error.message?.includes('alumni_types'))) {
       if (error.message?.includes('rsvp_status')) {
         noteMissingEventRsvpStatus();
         supportsEventRsvpStatus = false;
+      } else if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
       } else {
         noteMissingAlumniAddressColumn();
         supportsAlumniAddressColumn = false;
@@ -1812,6 +1851,7 @@ export default function App() {
               refreshToken={teamRefreshToken}
               onArchived={handleArchiveTeamMemberLocal}
               currentUserRole={currentUserRole}
+              isRoleLoading={isRoleLoading}
             />
           ) : activeTab === 'preview' ? (
             <FormPreview />

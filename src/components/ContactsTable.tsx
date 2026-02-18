@@ -85,7 +85,7 @@ export function ContactsTable({
                 <td className="p-4 text-gray-600">{contact.company ?? '—'}</td>
                 <td className="p-4 text-gray-600">{contact.occupation ?? '—'}</td>
                 <td className="p-4 text-gray-600">
-                  {contact.alumniType === 'marian_graduate' ? 'Marian Graduate' : contact.alumniType === 'graduate' ? 'Graduate' : '—'}
+                  {contact.alumniType === 'marian_graduate' ? 'MARIAN Graduate' : contact.alumniType === 'graduate' ? 'Graduate' : '—'}
                 </td>
                 <td className="p-4 text-gray-600">{contact.email}</td>
                 <td className="p-4">

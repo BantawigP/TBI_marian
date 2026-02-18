@@ -32,7 +32,7 @@ export function AlumniForm() {
 
     const FALLBACK_ALUMNI_TYPES = [
       { id: 1, name: 'Graduate' },
-      { id: 2, name: 'Marian Graduate' },
+      { id: 2, name: 'MARIAN Graduate' },
     ];
 
     const loadColleges = async () => {
@@ -74,11 +74,14 @@ export function AlumniForm() {
         const types =
           alumniTypesRes.error || !alumniTypesRes.data?.length
             ? FALLBACK_ALUMNI_TYPES
-            : alumniTypesRes.data.map((t) => ({ id: t.id, name: t.name }));
+            : alumniTypesRes.data.map((t) => ({
+                id: t.id,
+                name: t.name?.toLowerCase().includes('marian') ? 'MARIAN Graduate' : 'Graduate',
+              }));
 
         if (isMounted) {
           setAlumniTypeOptions(types);
-          const marianGrad = types.find((t) => t.name === 'Marian Graduate');
+          const marianGrad = types.find((t) => t.name === 'MARIAN Graduate');
           if (marianGrad) {
             setFormData((prev) => ({ ...prev, alumniTypeId: marianGrad.id }));
           }
@@ -375,7 +378,7 @@ export function AlumniForm() {
       college: '',
       program: '',
       dateGraduated: '',
-      alumniTypeId: alumniTypeOptions.find((t) => t.name === 'Marian Graduate')?.id ?? null,
+      alumniTypeId: alumniTypeOptions.find((t) => t.name === 'MARIAN Graduate')?.id ?? null,
       occupation: '',
       company: '',
     });

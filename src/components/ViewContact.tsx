@@ -75,7 +75,7 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
               <h3 className="text-2xl font-semibold text-gray-900 mb-2">
                 {contact.firstName} {contact.lastName}
               </h3>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap justify-center">
                 <span
                   className={`inline-flex px-4 py-1.5 rounded-full text-sm font-medium ${
                     contact.status === 'Verified'
@@ -146,7 +146,17 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
               <h4 className="text-[#FF2B5E] text-sm mb-4 uppercase tracking-wide mt-6">
                 Education
               </h4>
-
+              {contact.alumniType && (
+                <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
+                  <GraduationCap className="w-5 h-5 text-[#FF2B5E] mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Alumni Type</p>
+                    <p className="text-sm text-gray-900">
+                      {contact.alumniType === 'marian_graduate' ? 'Marian Graduate' : 'Graduate'}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
                 <GraduationCap className="w-5 h-5 text-[#FF2B5E] mt-0.5 flex-shrink-0" />
                 <div className="flex-1">

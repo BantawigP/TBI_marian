@@ -10,6 +10,7 @@ export function AlumniForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [alumniTypeOptions, setAlumniTypeOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [isLoadingColleges, setIsLoadingColleges] = useState(true);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -19,6 +20,7 @@ export function AlumniForm() {
     college: '',
     program: '',
     dateGraduated: '',
+    alumniTypeId: null as number | null,
     occupation: '',
     company: '',
   });
@@ -28,21 +30,25 @@ export function AlumniForm() {
   useEffect(() => {
     let isMounted = true;
 
+    const FALLBACK_ALUMNI_TYPES = [
+      { id: 1, name: 'Graduate' },
+      { id: 2, name: 'Marian Graduate' },
+    ];
+
     const loadColleges = async () => {
       setIsLoadingColleges(true);
 
       try {
-        const { data, error } = await supabase
+        // Load colleges (required)
+        const collegesRes = await supabase
           .from('colleges')
           .select('college_id, college_name')
           .order('college_name', { ascending: true });
 
-        if (error) {
-          throw error;
-        }
+        if (collegesRes.error) throw collegesRes.error;
 
         if (isMounted) {
-          const mapped = (data || []).map((college) => ({
+          const mapped = (collegesRes.data || []).map((college) => ({
             id: college.college_id,
             name: college.college_name,
           }));
@@ -54,8 +60,34 @@ export function AlumniForm() {
           description: error.message || 'Please refresh and try again.',
         });
       } finally {
+        if (isMounted) setIsLoadingColleges(false);
+      }
+
+      // Load alumni_types separately with graceful fallback in case the
+      // table migration has not been applied to the database yet.
+      try {
+        const alumniTypesRes = await supabase
+          .from('alumni_types')
+          .select('id, name')
+          .order('id', { ascending: true });
+
+        const types =
+          alumniTypesRes.error || !alumniTypesRes.data?.length
+            ? FALLBACK_ALUMNI_TYPES
+            : alumniTypesRes.data.map((t) => ({ id: t.id, name: t.name }));
+
         if (isMounted) {
-          setIsLoadingColleges(false);
+          setAlumniTypeOptions(types);
+          const marianGrad = types.find((t) => t.name === 'Marian Graduate');
+          if (marianGrad) {
+            setFormData((prev) => ({ ...prev, alumniTypeId: marianGrad.id }));
+          }
+        }
+      } catch {
+        // Table likely doesn't exist yet — use hardcoded fallback silently
+        if (isMounted) {
+          setAlumniTypeOptions(FALLBACK_ALUMNI_TYPES);
+          setFormData((prev) => ({ ...prev, alumniTypeId: FALLBACK_ALUMNI_TYPES[1].id }));
         }
       }
     };
@@ -68,8 +100,11 @@ export function AlumniForm() {
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'number' || name === 'alumniTypeId' ? (value ? Number(value) : null) : value,
+    }));
 
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
@@ -283,6 +318,9 @@ export function AlumniForm() {
       if (occupationId) {
         alumniPayload.occupation_id = occupationId;
       }
+      if (formData.alumniTypeId) {
+        alumniPayload.alumni_type_id = formData.alumniTypeId;
+      }
 
       console.log('Inserting alumni with payload:', alumniPayload);
 
@@ -337,6 +375,7 @@ export function AlumniForm() {
       college: '',
       program: '',
       dateGraduated: '',
+      alumniTypeId: alumniTypeOptions.find((t) => t.name === 'Marian Graduate')?.id ?? null,
       occupation: '',
       company: '',
     });
@@ -551,6 +590,27 @@ export function AlumniForm() {
                         disabled={isSubmitting}
                         className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Alumni Type <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-4">
+                      {alumniTypeOptions.map((opt) => (
+                        <label key={opt.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="alumniTypeId"
+                            value={opt.id}
+                            checked={formData.alumniTypeId === opt.id}
+                            onChange={handleInputChange}
+                            disabled={isSubmitting}
+                            className="w-4 h-4 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                          />
+                          <span className="text-sm text-gray-700">{opt.name}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                 </div>

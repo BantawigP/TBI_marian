@@ -152,7 +152,7 @@ export function ViewContact({ contact, onClose, onEdit }: ViewContactProps) {
                   <div className="flex-1">
                     <p className="text-xs text-gray-500 mb-1">Alumni Type</p>
                     <p className="text-sm text-gray-900">
-                      {contact.alumniType === 'marian_graduate' ? 'Marian Graduate' : 'Graduate'}
+                      {contact.alumniType === 'marian_graduate' ? 'MARIAN Graduate' : 'Graduate'}
                     </p>
                   </div>
                 </div>

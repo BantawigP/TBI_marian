@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export type PopupDialogTone = 'primary' | 'danger' | 'neutral' | 'success';
@@ -35,7 +36,7 @@ export function PopupDialog({
 
   const handleClose = onCancel ?? onConfirm;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
       <div
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
@@ -78,6 +79,7 @@ export function PopupDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

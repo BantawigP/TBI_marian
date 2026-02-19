@@ -203,8 +203,8 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
   };
 
   const handleGrantAccess = async (member: TeamMember) => {
-    if (member.role !== 'Manager' && member.role !== 'Member') {
-      setError('Only Manager and Member roles can be granted access');
+    if (member.role !== 'Admin' && member.role !== 'Manager' && member.role !== 'Member') {
+      setError('Only Admin, Manager, and Member roles can be granted access');
       return;
     }
 
@@ -294,11 +294,15 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
   }, {} as Record<string, number>);
 
   // Role-based access control for granting access
-  // Admin can grant to Manager & Member; Manager can grant to Member only; Member cannot grant
+  // Admin can grant to Admin/Manager/Member; Manager can grant to Member only; Member cannot grant
   const canGrantAccess = (targetMember: TeamMember): boolean => {
     if (!currentUserRole) return false;
     if (currentUserRole === 'Admin') {
-      return targetMember.role === 'Manager' || targetMember.role === 'Member';
+      return (
+        targetMember.role === 'Admin' ||
+        targetMember.role === 'Manager' ||
+        targetMember.role === 'Member'
+      );
     }
     if (currentUserRole === 'Manager') {
       return targetMember.role === 'Member';
@@ -520,26 +524,33 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
-                  {/* Show Grant Access button based on current user's role */}
-                  {canGrantAccess(member) ? (
-                    <button
-                      onClick={() => handleGrantAccess(member)}
-                      disabled={loading}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
-                        member.hasAccess
-                          ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-                          : 'bg-green-50 text-green-700 hover:bg-green-100'
-                      }`}
-                    >
-                      <Key className="w-4 h-4" />
-                      {member.hasAccess ? 'Resend Access' : 'Grant Access'}
-                    </button>
-                  ) : member.hasAccess ? (
+                  {member.hasAccess ? (
+                    canGrantAccess(member) ? (
+                      <button
+                        onClick={() => handleGrantAccess(member)}
+                        disabled={loading}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                      >
+                        <Key className="w-4 h-4" />
+                        Resend Access
+                      </button>
+                    ) : (
                     <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
                       <Key className="w-4 h-4" />
                       Has Access
                     </div>
-                  ) : null}
+                    )
+                  ) : (
+                    <button
+                      onClick={() => handleGrantAccess(member)}
+                      disabled={loading}
+                      title="Send access invitation"
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Key className="w-4 h-4" />
+                      Grant Access
+                    </button>
+                  )}
                   
                   <button
                     onClick={() => openEditModal(member)}

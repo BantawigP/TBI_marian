@@ -108,13 +108,13 @@ const renderEmailHtml = (
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 12px 0;">
                 <tr>
                   <td style="padding-right:8px;">
-                    <a href="${links.yesUrl}" style="display:inline-block;padding:12px 18px;background:#16a34a;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">Yes, I'm in</a>
+                    <a href="${links.yesUrl}" style="display:inline-block;padding:12px 18px;background:#16a34a;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">Yes</a>
                   </td>
                   <td style="padding-right:8px;">
                     <a href="${links.maybeUrl}" style="display:inline-block;padding:12px 18px;background:#fbbf24;color:#92400e;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">Maybe</a>
                   </td>
                   <td>
-                    <a href="${links.noUrl}" style="display:inline-block;padding:12px 18px;background:#ef4444;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">Can't make it</a>
+                    <a href="${links.noUrl}" style="display:inline-block;padding:12px 18px;background:#ef4444;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">No</a>
                   </td>
                 </tr>
               </table>

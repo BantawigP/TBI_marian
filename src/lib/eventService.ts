@@ -87,6 +87,20 @@ export async function createEvent(
       .select('event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country)')
       .single()
 
+    const eventErrorMessage = (eventError as { message?: string } | null)?.message ?? '';
+
+    if (
+      eventError &&
+      eventError.code === '23505' &&
+      (
+        eventErrorMessage.includes('event_title_key') ||
+        eventErrorMessage.includes('events_title_key') ||
+        eventErrorMessage.includes('Key (title)=')
+      )
+    ) {
+      throw new Error('Duplicate event title is currently blocked by an old database constraint. Apply the latest migration and try again.');
+    }
+
     if (eventError) throw eventError
 
     const eventId = event?.event_id ?? null;
@@ -168,6 +182,20 @@ export async function updateEvent(
       .eq('event_id', parseInt(eventId))
       .select('event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country)')
       .single()
+
+    const eventErrorMessage = (eventError as { message?: string } | null)?.message ?? '';
+
+    if (
+      eventError &&
+      eventError.code === '23505' &&
+      (
+        eventErrorMessage.includes('event_title_key') ||
+        eventErrorMessage.includes('events_title_key') ||
+        eventErrorMessage.includes('Key (title)=')
+      )
+    ) {
+      throw new Error('Duplicate event title is currently blocked by an old database constraint. Apply the latest migration and try again.');
+    }
 
     if (eventError) throw eventError
 

@@ -71,10 +71,24 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
     );
   };
 
-  // Filter only verified people who are not already attendees
+  const renderVerificationBadge = (status: Contact['status']) => {
+    const isVerified = status === 'Verified';
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+          isVerified
+            ? 'bg-green-100 text-green-700 border-green-200'
+            : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+        }`}
+      >
+        {status}
+      </span>
+    );
+  };
+
+  // Filter contacts not already attendees
   const contactedPeople = contacts.filter(
     (c) =>
-      c.status === 'Verified' &&
       !event.attendees.some((a) => a.id === c.id)
   );
 
@@ -88,6 +102,35 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
       prev.includes(contactId)
         ? prev.filter((id) => id !== contactId)
         : [...prev, contactId]
+    );
+  };
+
+  const toggleExclusiveSelection = (targetIds: string[]) => {
+    const uniqueTargetIds = Array.from(new Set(targetIds));
+    const isSameSelection =
+      selectedAttendees.length === uniqueTargetIds.length &&
+      uniqueTargetIds.every((id) => selectedAttendees.includes(id));
+
+    setSelectedAttendees(isSameSelection ? [] : uniqueTargetIds);
+  };
+
+  const selectAllAttendees = () => {
+    toggleExclusiveSelection(contactedPeople.map((contact) => contact.id));
+  };
+
+  const selectVerifiedAttendees = () => {
+    toggleExclusiveSelection(
+      contactedPeople
+        .filter((contact) => contact.status === 'Verified')
+        .map((contact) => contact.id)
+    );
+  };
+
+  const selectUnverifiedAttendees = () => {
+    toggleExclusiveSelection(
+      contactedPeople
+        .filter((contact) => contact.status === 'Unverified')
+        .map((contact) => contact.id)
     );
   };
 
@@ -209,6 +252,29 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent mb-3"
                   />
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={selectAllAttendees}
+                      className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectVerifiedAttendees}
+                      className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Select Verified Only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectUnverifiedAttendees}
+                      className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Select Unverified Only
+                    </button>
+                  </div>
                   <div className="max-h-60 overflow-y-auto space-y-2 mb-3">
                     {filteredContacts.length > 0 ? (
                       filteredContacts.map((contact) => (
@@ -234,6 +300,9 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                               <p className="text-xs text-gray-600 truncate">
                                 {contact.email}
                               </p>
+                            </div>
+                            <div className="shrink-0">
+                              {renderVerificationBadge(contact.status)}
                             </div>
                           </div>
                         </label>

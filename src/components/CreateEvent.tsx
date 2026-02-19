@@ -23,9 +23,13 @@ const PREDEFINED_EVENT_TITLES = [
   'Financial Management Workshop',
   'Digital Marketing',
   'Effective Communication & Negotiation on Startups Workshop',
-  'info Session on DTI/Sec Registration/Business Registration',
-  'IP Orientation, IP Search, IP Drafting',
+  'Info Session on DTI/Sec Registration/Business Registration',
+  'IP Orientation/ Reorientation',
+  'IP Patent Search Seminar & Workshop',
+  'IP Drafting Workshop and Workshop - 2 days',
+  'IP Evaluation Sessions (max of 3)',
   'Monthly Progress Reporting',
+  'Market Testing, Validation & Stakeholder Engagement',
   'Market Validation & Stakeholder Engagement',
   'Refinement of MVP & Business Model',
   'Final Milestone Review & Evaluation',
@@ -68,13 +72,40 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
     status: c.status
   })));
 
-  // Filter only verified people
-  const contactedPeople = contacts.filter((c) => c.status === 'Verified');
+  const availableContacts = contacts;
 
-  const filteredContacts = contactedPeople.filter((contact) =>
+  const filteredContacts = availableContacts.filter((contact) =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const renderVerificationBadge = (status: Contact['status']) => {
+    const isVerified = status === 'Verified';
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+          isVerified
+            ? 'bg-green-100 text-green-700 border-green-200'
+            : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+        }`}
+      >
+        {status}
+      </span>
+    );
+  };
+
+  const formatCreateEventError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : 'Failed to create event';
+
+    if (
+      message.includes('event_title_key') ||
+      message.includes('Duplicate event title is currently blocked by an old database constraint')
+    ) {
+      return 'This workspace still has the old unique title rule in the database. Apply the latest migration, then try creating the event again.';
+    }
+
+    return message;
+  };
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -88,13 +119,42 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
     );
   };
 
+  const toggleExclusiveSelection = (targetIds: string[]) => {
+    const uniqueTargetIds = Array.from(new Set(targetIds));
+    const isSameSelection =
+      selectedAttendees.length === uniqueTargetIds.length &&
+      uniqueTargetIds.every((id) => selectedAttendees.includes(id));
+
+    setSelectedAttendees(isSameSelection ? [] : uniqueTargetIds);
+  };
+
+  const selectAllAttendees = () => {
+    toggleExclusiveSelection(availableContacts.map((contact) => contact.id));
+  };
+
+  const selectVerifiedAttendees = () => {
+    toggleExclusiveSelection(
+      availableContacts
+        .filter((contact) => contact.status === 'Verified')
+        .map((contact) => contact.id)
+    );
+  };
+
+  const selectUnverifiedAttendees = () => {
+    toggleExclusiveSelection(
+      availableContacts
+        .filter((contact) => contact.status === 'Unverified')
+        .map((contact) => contact.id)
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      const attendees = contactedPeople
+      const attendees = availableContacts
         .filter((c) => selectedAttendees.includes(c.id))
         .map((c) => ({ ...c, rsvpStatus: 'pending' as const }));
 
@@ -120,7 +180,7 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
       // Close the modal after successful creation
       onClose();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create event';
+      const errorMessage = formatCreateEventError(err);
       setError(errorMessage);
       console.error('Event creation error:', err);
     } finally {
@@ -160,6 +220,9 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                     <label className="block text-sm text-[#FF2B5E] mb-2">
                       Event Title
                     </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Duplicate titles are allowed for different schedules.
+                    </p>
                     <div className="relative">
                       <input
                         type="text"
@@ -266,11 +329,35 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                 {/* Search */}
                 <input
                   type="text"
-                  placeholder="Search contacted people..."
+                  placeholder="Search contacts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent mb-4"
                 />
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={selectAllAttendees}
+                    className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={selectVerifiedAttendees}
+                    className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Select Verified Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={selectUnverifiedAttendees}
+                    className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Select Unverified Only
+                  </button>
+                </div>
 
                 {/* Attendees List */}
                 <div className="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
@@ -300,6 +387,9 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                                 {contact.email}
                               </p>
                             </div>
+                            <div className="shrink-0">
+                              {renderVerificationBadge(contact.status)}
+                            </div>
                           </div>
                         </label>
                       ))}
@@ -307,8 +397,8 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                   ) : (
                     <div className="text-center py-8 text-gray-500">
                       <p className="text-sm">
-                        {contactedPeople.length === 0
-                          ? 'No contacted people available'
+                        {availableContacts.length === 0
+                          ? 'No contacts available'
                           : 'No contacts found'}
                       </p>
                     </div>
@@ -316,7 +406,7 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                 </div>
 
                 <p className="text-xs text-gray-500 mt-2">
-                  Only contacted people can be added to events
+                  Verified and unverified contacts can be added to events
                 </p>
               </div>
             </div>

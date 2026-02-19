@@ -6,7 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 interface Payload {
   teamMemberId: number;
   email: string;
-  role: "Manager" | "Member";
+  role: "Admin" | "Manager" | "Member";
 }
 
 const corsHeaders = {
@@ -112,13 +112,6 @@ If you didn’t request this, ignore this email.
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { ...corsHeaders } });
-  }
-
-  if (!RESEND_API_KEY) {
-    return new Response(JSON.stringify({ error: "RESEND_API_KEY is not set" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
 
   if (!supabase) {
@@ -292,6 +285,23 @@ serve(async (req) => {
   console.log("Using from address:", fromAddress);
   console.log("Sending email to:", email);
 
+  if (!RESEND_API_KEY) {
+    await supabase
+      .from("teams")
+      .update({ has_access: true, user_id: authUserId })
+      .eq("id", teamMemberId);
+
+    return new Response(JSON.stringify({
+      message: "Access granted, but email was not sent because RESEND_API_KEY is missing. Share the magic link manually.",
+      warning: "Email not sent — RESEND_API_KEY is not set",
+      claimLink,
+      actionLink,
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -329,9 +339,20 @@ serve(async (req) => {
       });
     }
 
-    // Any other Resend failure: do NOT set has_access so admin can retry
-    return new Response(JSON.stringify({ error: "Failed to send invitation email", detail: errorText }), {
-      status: 502,
+    // Any other Resend failure: return links for manual share so access flow can continue.
+    await supabase
+      .from("teams")
+      .update({ has_access: true, user_id: authUserId })
+      .eq("id", teamMemberId);
+
+    return new Response(JSON.stringify({
+      message: "Access granted, but invitation email failed to send. Share the magic link manually.",
+      warning: "Email not sent — Resend delivery failed",
+      detail: errorText,
+      claimLink,
+      actionLink,
+    }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

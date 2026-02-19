@@ -32,6 +32,7 @@ export function PersonalSettings({
   const requiresCurrentPassword = Boolean(hasExistingPassword);
 
   const ensureActiveSession = async () => {
+    // 1. Try the in-memory session first (cheapest check).
     const { data, error } = await supabase.auth.getSession();
     if (error) {
       console.warn('Unable to read auth session before password update:', error.message);
@@ -41,13 +42,24 @@ export function PersonalSettings({
       return data.session;
     }
 
-    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      console.warn('Unable to refresh auth session before password update:', refreshError.message);
-      return null;
+    // 2. Session might have been lost (e.g. refreshSession() was called
+    //    elsewhere at a bad time). Try refreshing once.
+    try {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session) {
+        return refreshed.session;
+      }
+      if (refreshError) {
+        console.warn('Unable to refresh auth session before password update:', refreshError.message);
+      }
+    } catch {
+      // refreshSession can throw in some edge cases — swallow it.
     }
 
-    return refreshed.session ?? null;
+    // 3. Last resort: call getUser() which validates the JWT server-side.
+    //    If the user is still authenticated, re-derive a session via signOut + auto-restore.
+    //    But practically, if we reach here the user needs to log in again.
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

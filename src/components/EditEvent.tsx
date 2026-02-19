@@ -26,6 +26,21 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
     contact.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const renderVerificationBadge = (status: Contact['status']) => {
+    const isVerified = status === 'Verified';
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+          isVerified
+            ? 'bg-green-100 text-green-700 border-green-200'
+            : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+        }`}
+      >
+        {status}
+      </span>
+    );
+  };
+
   const handleAddAttendee = (contact: Contact) => {
     setSelectedAttendees([...selectedAttendees, { ...contact, rsvpStatus: 'pending' }]);
     setSearchQuery('');
@@ -33,6 +48,45 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
 
   const handleRemoveAttendee = (contactId: string) => {
     setSelectedAttendees(selectedAttendees.filter((c) => c.id !== contactId));
+  };
+
+  const toggleAvailableGroup = (contactsToToggle: Contact[]) => {
+    const targetIds = contactsToToggle.map((contact) => contact.id);
+    const allSelected = targetIds.every((id) =>
+      selectedAttendees.some((attendee) => attendee.id === id)
+    );
+
+    if (allSelected) {
+      setSelectedAttendees((prev) =>
+        prev.filter((attendee) => !targetIds.includes(attendee.id))
+      );
+      return;
+    }
+
+    setSelectedAttendees((prev) => {
+      const existingIds = new Set(prev.map((attendee) => attendee.id));
+      const contactsToAdd = contactsToToggle
+        .filter((contact) => !existingIds.has(contact.id))
+        .map((contact) => ({ ...contact, rsvpStatus: 'pending' as const }));
+
+      return [...prev, ...contactsToAdd];
+    });
+  };
+
+  const selectAllAttendees = () => {
+    toggleAvailableGroup(availableContacts);
+  };
+
+  const selectVerifiedAttendees = () => {
+    toggleAvailableGroup(
+      availableContacts.filter((contact) => contact.status === 'Verified')
+    );
+  };
+
+  const selectUnverifiedAttendees = () => {
+    toggleAvailableGroup(
+      availableContacts.filter((contact) => contact.status === 'Unverified')
+    );
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -150,6 +204,30 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
 
             {/* Search contacts */}
             <div className="mb-3">
+              <div className="flex flex-wrap gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={selectAllAttendees}
+                  className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={selectVerifiedAttendees}
+                  className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Select Verified Only
+                </button>
+                <button
+                  type="button"
+                  onClick={selectUnverifiedAttendees}
+                  className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Select Unverified Only
+                </button>
+              </div>
+
               <input
                 type="text"
                 value={searchQuery}
@@ -166,8 +244,15 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
                       onClick={() => handleAddAttendee(contact)}
                       className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors"
                     >
-                      <div className="font-medium text-gray-900">{contact.name}</div>
-                      <div className="text-sm text-gray-500">{contact.email}</div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 truncate">{contact.name}</div>
+                          <div className="text-sm text-gray-500 truncate">{contact.email}</div>
+                        </div>
+                        <div className="shrink-0">
+                          {renderVerificationBadge(contact.status)}
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>

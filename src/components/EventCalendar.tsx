@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { useState } from 'react';
 import type { Event } from '../types';
 
@@ -9,6 +9,77 @@ interface EventCalendarProps {
 
 export function EventCalendar({ events, onViewEvent }: EventCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const escapeIcsText = (value: string) =>
+    value
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/,/g, '\\,')
+      .replace(/;/g, '\\;');
+
+  const formatUtcDateTime = (date: Date) => {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+  };
+
+  const createEventDateTime = (date: string, time: string) => {
+    const [year, month, day] = date.split('-').map(Number);
+    const [hours, minutes] = time.split(':').map(Number);
+    return new Date(year, (month ?? 1) - 1, day ?? 1, hours ?? 0, minutes ?? 0, 0);
+  };
+
+  const downloadCalendar = () => {
+    if (events.length === 0) return;
+
+    const nowStamp = formatUtcDateTime(new Date());
+    const sortedEvents = [...events].sort((first, second) => {
+      const firstDate = createEventDateTime(first.date, first.time).getTime();
+      const secondDate = createEventDateTime(second.date, second.time).getTime();
+      return firstDate - secondDate;
+    });
+
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Marian TBI//Events Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      ...sortedEvents.flatMap((event) => {
+        const startDate = createEventDateTime(event.date, event.time);
+        const endDate = new Date(startDate);
+        endDate.setHours(endDate.getHours() + 1);
+
+        return [
+          'BEGIN:VEVENT',
+          `UID:${event.id}@marian-tbi-events`,
+          `DTSTAMP:${nowStamp}`,
+          `DTSTART:${formatUtcDateTime(startDate)}`,
+          `DTEND:${formatUtcDateTime(endDate)}`,
+          `SUMMARY:${escapeIcsText(event.title)}`,
+          `DESCRIPTION:${escapeIcsText(event.description || '')}`,
+          `LOCATION:${escapeIcsText(event.location || '')}`,
+          'END:VEVENT',
+        ];
+      }),
+      'END:VCALENDAR',
+    ];
+
+    const icsContent = `${icsLines.join('\r\n')}\r\n`;
+    const file = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+    const downloadUrl = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.setAttribute('download', `events-calendar-${new Date().toISOString().split('T')[0]}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+  };
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -94,6 +165,14 @@ export function EventCalendar({ events, onViewEvent }: EventCalendarProps) {
           {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            onClick={downloadCalendar}
+            disabled={events.length === 0}
+            className="px-3 py-2 text-sm bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300 flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Download Calendar
+          </button>
           <button
             onClick={goToToday}
             className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"

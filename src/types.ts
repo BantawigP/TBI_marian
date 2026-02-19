@@ -57,4 +57,6 @@ export interface TeamMember {
   phone?: string;
   joinedDate?: string;
   hasAccess?: boolean;
+  /** True when the member has logged in and their auth account is linked (user_id is set). */
+  isLinked?: boolean;
 }

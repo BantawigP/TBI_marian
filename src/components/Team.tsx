@@ -209,6 +209,10 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
     }
 
     // Enforce role-based grant rules
+    if (isRoleLoading) {
+      setError('Your role is still loading. Please wait a moment and try again.');
+      return;
+    }
     if (!currentUserRole) {
       setError('Unable to determine your role. Please refresh and try again.');
       return;
@@ -524,7 +528,14 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
-                  {member.hasAccess ? (
+                  {member.isLinked ? (
+                    // Member has logged in — their account is fully active
+                    <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
+                      <Key className="w-4 h-4" />
+                      Has Access
+                    </div>
+                  ) : member.hasAccess ? (
+                    // Invite was sent but member hasn't logged in yet
                     canGrantAccess(member) ? (
                       <button
                         onClick={() => handleGrantAccess(member)}
@@ -535,12 +546,13 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                         Resend Access
                       </button>
                     ) : (
-                    <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
-                      <Key className="w-4 h-4" />
-                      Has Access
-                    </div>
+                      <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
+                        <Key className="w-4 h-4" />
+                        Has Access
+                      </div>
                     )
                   ) : (
+                    // Not yet invited
                     <button
                       onClick={() => handleGrantAccess(member)}
                       disabled={loading}

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { getCachedSessionToken } from './sessionCache';
 import type { TeamMember, TeamRole } from '../types';
 
 // Database interfaces
@@ -14,6 +15,7 @@ interface TeamRow {
   avatar_color: string | null;
   is_active: boolean;
   has_access: boolean | null;
+  user_id: string | null;
   roles?: { id: number; role_name: string } | null;
   departments?: { id: number; department_name: string } | null;
 }
@@ -37,6 +39,7 @@ function rowToTeamMember(row: TeamRow): TeamMember {
     joinedDate: row.joined_date ? new Date(row.joined_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : undefined,
     avatarColor: row.avatar_color || '#FF2B5E',
     hasAccess: row.has_access ?? undefined,
+    isLinked: !!row.user_id,
   };
 }
 
@@ -50,10 +53,11 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
     .from('teams')
     .select(`
       *,
+      user_id,
       roles(id, role_name),
       departments(id, department_name)
     `)
-    .eq('is_active', true)
+    .or('is_active.eq.true,is_active.is.null')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -175,6 +179,7 @@ export async function createTeamMember(member: Omit<TeamMember, 'id'>): Promise<
         joined_date: joinedDate,
         avatar_color: member.avatarColor || '#FF2B5E',
         is_active: true,
+        has_access: false,
       })
       .select(`
         *,
@@ -297,18 +302,28 @@ export async function grantAccess(
   role: 'Admin' | 'Manager' | 'Member'
 ): Promise<{ success: boolean; message: string; warning?: string; claimLink?: string; actionLink?: string }> {
   try {
-    // Refresh session first to ensure we have a valid token
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    
-    if (refreshError || !refreshData.session) {
-      console.error('Session refresh error:', refreshError);
-      throw new Error('Your session has expired. Please log in again.');
+    // Get a valid access token. Prefer the in-memory session; fall back to the
+    // module-level cache written by App.tsx's onAuthStateChange. This handles
+    // the case where the device clock is skewed and getSession()/refreshSession()
+    // both fail because the SDK sees the JWT as "issued in the future".
+    let accessToken: string | null = null;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.access_token) {
+      accessToken = sessionData.session.access_token;
     }
 
-    const session = refreshData.session;
-    console.log('✓ Session refreshed, granting access...');
-    console.log('Token length:', session.access_token.length);
-    console.log('User:', session.user.email);
+    // Fallback: session cache written when we last received onAuthStateChange
+    if (!accessToken) {
+      accessToken = getCachedSessionToken();
+      if (accessToken) {
+        console.log('grantAccess: using cached session token (clock skew fallback)');
+      }
+    }
+
+    if (!accessToken) {
+      throw new Error('Your session has expired. Please log in again.');
+    }
 
     // Call the grant-access Edge Function
     const response = await fetch(
@@ -316,7 +331,7 @@ export async function grantAccess(
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },

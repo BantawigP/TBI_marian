@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Login } from './components/Login';
 import { ClaimAccess } from './components/ClaimAccess';
 import { Sidebar } from './components/Sidebar';
@@ -30,6 +30,7 @@ import {
   deleteTeamMemberPermanently,
 } from './lib/teamService';
 import { linkMyAccountToTeam } from './lib/linkAccountService';
+import { setCachedSession, clearCachedSession } from './lib/sessionCache';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -465,7 +466,11 @@ export default function App() {
   } | null>(null);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
   const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
-  const [isRoleLoading, setIsRoleLoading] = useState(false);
+  const [isRoleLoading, setIsRoleLoading] = useState(true);
+  // Cache the last valid session token + user from onAuthStateChange.
+  // getSession() can return null when device clock is skewed, so we preserve
+  // the token here and use it as a fallback in fetchCurrentUserRole.
+  const cachedSessionRef = useRef<{ accessToken: string; user: any } | null>(null);
   const [showPersonalSettings, setShowPersonalSettings] = useState(false);
   const [currentUserName, setCurrentUserName] = useState('');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
@@ -566,13 +571,22 @@ export default function App() {
             );
             return;
           }
+        }
 
-          // Link the auth user to their teams row (sets user_id + has_access)
-          try {
-            await linkMyAccountToTeam(session.user);
-          } catch (e) {
-            console.warn('Account linking failed (role-based features may not work):', e);
-          }
+        // Cache the session token for use in fetchCurrentUserRole and services
+        // like grantAccess. This survives clock-skew scenarios where getSession()
+        // returns null because the SDK discards a token it sees as "from the future".
+        cachedSessionRef.current = { accessToken: session.access_token, user: session.user };
+        setCachedSession(session.access_token, session.user);
+
+        // Link the auth user to their teams row (sets user_id + has_access)
+        // This covers all login methods: password, magic link, Google OAuth, etc.
+        // Pass access_token directly so linkMyAccountToTeam doesn't call
+        // refreshSession() which can corrupt the session mid-transition.
+        try {
+          await linkMyAccountToTeam(session.user, session.access_token);
+        } catch (e) {
+          console.warn('Account linking failed (role-based features may not work):', e);
         }
 
         setIsLoggedIn(true);
@@ -590,12 +604,32 @@ export default function App() {
     try {
       // Try getUser first; fall back to session user (avoids AuthSessionMissingError on OAuth)
       let authUser: any = null;
+      let accessToken: string | null = null;
+
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (!userError && userData?.user) {
         authUser = userData.user;
-      } else {
-        const { data: sessionData } = await supabase.auth.getSession();
-        authUser = sessionData.session?.user ?? null;
+      }
+
+      // Always grab the session to get the access token (needed for edge function fallback)
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        accessToken = sessionData.session.access_token;
+        if (!authUser) {
+          authUser = sessionData.session.user;
+        }
+      }
+
+      // Fallback: use the token/user cached from onAuthStateChange.
+      // This is essential when the device clock is skewed — getSession() returns
+      // null because the SDK refuses to restore a token it thinks is from the
+      // future, but the token we received directly from the auth event is still valid.
+      if (!accessToken && cachedSessionRef.current?.accessToken) {
+        accessToken = cachedSessionRef.current.accessToken;
+        console.log('fetchCurrentUserRole: using cached session token (clock skew fallback)');
+      }
+      if (!authUser && cachedSessionRef.current?.user) {
+        authUser = cachedSessionRef.current.user;
       }
 
       if (!authUser) {
@@ -629,6 +663,7 @@ export default function App() {
         .from('teams')
         .select('id, email, first_name, last_name, roles(role_name)')
         .eq('user_id', authUser.id)
+        .or('is_active.eq.true,is_active.is.null')
         .maybeSingle();
 
       if (!byUserIdError && byUserId) {
@@ -640,7 +675,7 @@ export default function App() {
             .from('teams')
             .select('id, email, first_name, last_name, roles(role_name)')
             .ilike('email', userEmail)
-            .eq('is_active', true)
+            .or('is_active.eq.true,is_active.is.null')
             .maybeSingle();
 
           if (byEmailError) {
@@ -654,10 +689,41 @@ export default function App() {
       }
 
       if (roleError) {
-        console.warn('Supabase: failed to load current user role', roleError);
-        setCurrentUserRole(null);
-        setCurrentUserName(derivedName || userEmail || '');
-        return;
+        console.warn('Supabase: failed to load current user role via direct query', roleError);
+      }
+
+      // If direct DB lookups failed (e.g. RLS blocking or user_id not linked),
+      // use the process-team-auth edge function as a fallback.
+      // It uses the service role key to bypass RLS and link the account.
+      if (!roleRow) {
+        console.log('Direct role lookup failed, trying process-team-auth edge function...');
+        const linkedRole = await linkMyAccountToTeam(authUser, accessToken ?? undefined);
+        if (linkedRole) {
+          setCurrentUserRole(linkedRole as TeamRole);
+          // Re-try the direct lookup now that user_id is linked
+          const { data: retryRow } = await supabase
+            .from('teams')
+            .select('id, email, first_name, last_name, roles(role_name)')
+            .eq('user_id', authUser.id)
+            .or('is_active.eq.true,is_active.is.null')
+            .maybeSingle();
+          if (retryRow) {
+            roleRow = retryRow;
+            // Update name from teams row
+            const teamName = `${retryRow.first_name ?? ''} ${retryRow.last_name ?? ''}`.trim();
+            if (teamName) setCurrentUserName(teamName);
+            else setCurrentUserName(derivedName || userEmail || '');
+            if (retryRow.email) setCurrentUserEmail(retryRow.email);
+          } else {
+            // RLS still blocks retry — use edge function role and derived profile
+            setCurrentUserName(derivedName || userEmail || '');
+          }
+          return; // Role already set from edge function
+        } else {
+          setCurrentUserRole(null);
+          setCurrentUserName(derivedName || userEmail || '');
+          return;
+        }
       }
 
       const rolesData = roleRow?.roles as { role_name?: string } | { role_name?: string }[] | null;
@@ -1268,6 +1334,8 @@ export default function App() {
       console.error('Supabase: failed to sign out', error);
     }
 
+    clearCachedSession();
+    cachedSessionRef.current = null;
     setIsLoggedIn(false);
     setActiveTab('home');
     setShowForm(false);

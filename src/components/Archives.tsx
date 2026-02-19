@@ -66,7 +66,7 @@ export function Archives({
   const handleRestoreContact = async (contact: Contact) => {
     const confirmed = await openConfirm({
       title: 'Restore contact',
-      message: `Restore ${contact.name}?`,
+      message: `Restore ${contact.lastName}, ${contact.firstName}?`,
       tone: 'primary',
     });
     if (confirmed) {
@@ -112,7 +112,7 @@ export function Archives({
   const handleRestoreTeamMember = async (member: TeamMember) => {
     const confirmed = await openConfirm({
       title: 'Restore team member',
-      message: `Restore ${member.name}?`,
+      message: `Restore ${member.lastName}, ${member.firstName}?`,
       tone: 'primary',
     });
     if (confirmed) {
@@ -293,7 +293,7 @@ export function Archives({
                             </button>
                             <button
                               onClick={() =>
-                                handlePermanentDeleteContact(contact.id, contact.name)
+                                handlePermanentDeleteContact(contact.id, `${contact.lastName}, ${contact.firstName}`)
                               }
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Permanently delete"
@@ -444,7 +444,7 @@ export function Archives({
                             </button>
                             <button
                               onClick={() =>
-                                handlePermanentDeleteTeamMember(member.id, member.name)
+                                handlePermanentDeleteTeamMember(member.id, `${member.lastName}, ${member.firstName}`)
                               }
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Permanently delete"

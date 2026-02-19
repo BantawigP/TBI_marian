@@ -113,7 +113,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
       await loadTeamMembers();
       openAlert({
         title: 'Member added',
-        message: `Member added successfully, ${createdMember.name}.`,
+        message: `Member added successfully, ${createdMember.lastName}, ${createdMember.firstName}.`,
         tone: 'success',
       });
       setShowAddModal(false);
@@ -189,7 +189,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
       await loadTeamMembers();
       openAlert({
         title: 'Member updated',
-        message: `${editForm.firstName} ${editForm.lastName} has been updated successfully.`,
+        message: `${editForm.lastName}, ${editForm.firstName} has been updated successfully.`,
         tone: 'success',
       });
       setEditingMember(null);
@@ -225,8 +225,8 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
     const confirmed = await openConfirm({
       title: member.hasAccess ? 'Resend access invitation' : 'Send access invitation',
       message: member.hasAccess
-        ? `${member.name} already has access but may not have received the email. Resend the invitation to ${member.email}?`
-        : `Send access invitation to ${member.name} (${member.email})?`,
+        ? `${member.lastName}, ${member.firstName} already has access but may not have received the email. Resend the invitation to ${member.email}?`
+        : `Send access invitation to ${member.lastName}, ${member.firstName} (${member.email})?`,
       confirmLabel: member.hasAccess ? 'Resend invite' : 'Send invite',
       tone: 'primary',
     });
@@ -549,7 +549,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteMember(member.id, member.name)}
+                    onClick={() => handleDeleteMember(member.id, `${member.lastName}, ${member.firstName}`)}
                     disabled={loading}
                     className="flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
                   >

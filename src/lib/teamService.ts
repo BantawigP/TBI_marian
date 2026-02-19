@@ -289,12 +289,12 @@ export async function deleteTeamMemberPermanently(id: string): Promise<void> {
  * Grant system access to a team member by sending a magic link invitation
  * @param teamMemberId - The ID of the team member
  * @param email - The email to send the invitation to
- * @param role - The role to grant (Manager or Member)
+ * @param role - The role to grant (Admin, Manager, or Member)
  */
 export async function grantAccess(
   teamMemberId: string,
   email: string,
-  role: 'Manager' | 'Member'
+  role: 'Admin' | 'Manager' | 'Member'
 ): Promise<{ success: boolean; message: string; warning?: string; claimLink?: string; actionLink?: string }> {
   try {
     // Refresh session first to ensure we have a valid token

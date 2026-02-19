@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Edge Function: send-verification-email
 // Generates a one-time token, stores its hash, builds a tokenized verify URL, and sends via Resend.
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -10,7 +11,19 @@ interface Payload {
   brandName?: string;
   verifyUrl?: string; // optional: fully built URL; if absent we build APP_URL/verify-email?token=...
   from?: string;
+  campaignType?: "initial" | "rapport";
+  intervalMonths?: 1 | 3 | 6 | 12;
 }
+
+type RapportInterval = 1 | 3 | 6 | 12;
+
+type EmailContent = {
+  heading: string;
+  intro: string;
+  detail: string;
+  ctaLabel: string;
+  subject: string;
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,11 +50,62 @@ const hashToken = async (token: string) => {
   return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
+const isRapportInterval = (value: unknown): value is RapportInterval => value === 1 || value === 3 || value === 6 || value === 12;
+
+const getEmailContent = (
+  campaignType: "initial" | "rapport",
+  intervalMonths: RapportInterval | null,
+): EmailContent => {
+  if (campaignType === "rapport" && intervalMonths) {
+    const intervalCopy: Record<RapportInterval, EmailContent> = {
+      1: {
+        heading: "Please verify your email address",
+        intro: "We’re excited to keep you connected with MARIAN TBI. To ensure you continue receiving exclusive invitations to our upcoming events, please verify your email address.",
+        detail: "This quick step helps us maintain a secure and reliable system, ensuring you don’t miss out on future opportunities.",
+        ctaLabel: "Verify your email",
+        subject: "MARIAN TBI: 1-month email verification reminder",
+      },
+      3: {
+        heading: "Three-month verification follow-up",
+        intro: "Three months have passed since your last verification. To continue securing your access to future MARIAN TBI event invitations, please verify your email address again.",
+        detail: "Your cooperation ensures uninterrupted access to our community and events.",
+        ctaLabel: "Verify your email",
+        subject: "MARIAN TBI: 3-month email verification follow-up",
+      },
+      6: {
+        heading: "Six-month verification follow-up",
+        intro: "Six months have passed since your last verification. To maintain your eligibility for future MARIAN TBI events, we kindly ask you to verify your email address once more.",
+        detail: "This step helps us keep your connection secure and ensures you don’t miss out on upcoming opportunities.",
+        ctaLabel: "Verify your email",
+        subject: "MARIAN TBI: 6-month email verification follow-up",
+      },
+      12: {
+        heading: "Annual verification reminder",
+        intro: "It has been one year since your last verification. As part of our annual process, please verify your email address to continue receiving invitations to MARIAN TBI events.",
+        detail: "We appreciate your cooperation and look forward to welcoming you to our future gatherings.",
+        ctaLabel: "Verify your email",
+        subject: "MARIAN TBI: annual email verification reminder",
+      },
+    };
+
+    return intervalCopy[intervalMonths];
+  }
+
+  return {
+    heading: "Verify your email",
+    intro: "Thank you for completing the form.",
+    detail: "To ensure we have the right person, please verify your email address by clicking the link below.",
+    ctaLabel: "Verify email",
+    subject: "Please verify your email",
+  };
+};
+
 const renderVerifyEmailHTML = ({
   firstName = "there",
   verifyUrl,
   brandName = "Marian Alumni Network",
-}: Required<Pick<Payload, "verifyUrl">> & Partial<Payload>) => `
+  content,
+}: Required<Pick<Payload, "verifyUrl">> & Partial<Payload> & { content: EmailContent }) => `
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f9fafb;padding:32px 0;font-family:Arial,Helvetica,sans-serif;">
   <tr>
     <td align="center">
@@ -49,12 +113,14 @@ const renderVerifyEmailHTML = ({
         <tr>
           <td style="padding:24px 28px;">
             <p style="margin:0 0 12px 0;font-size:14px;color:#6b7280;">${brandName}</p>
-            <h1 style="margin:0 0 16px 0;font-size:22px;color:#111827;">Verify your email</h1>
-            <p style="margin:0 0 12px 0;font-size:15px;color:#374151;">Hello ${firstName},</p>
-            <p style="margin:0 0 16px 0;font-size:15px;color:#374151;">Thank you for completing the form. To ensure we have the right person, please verify your email address by clicking the link below:</p>
+            <h1 style="margin:0 0 16px 0;font-size:22px;color:#111827;">${content.heading}</h1>
+            <p style="margin:0 0 12px 0;font-size:15px;color:#374151;">Dear ${firstName},</p>
+            <p style="margin:0 0 10px 0;font-size:15px;color:#374151;">${content.intro}</p>
+            <p style="margin:0 0 16px 0;font-size:15px;color:#374151;">${content.detail}</p>
+            <p style="margin:0 0 12px 0;font-size:15px;color:#374151;">Click the link below to confirm:</p>
             <p style="margin:0 0 24px 0;">
               <a href="${verifyUrl}" style="display:inline-block;padding:12px 18px;background:#FF2B5E;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">
-                Verify email
+                ${content.ctaLabel}
               </a>
             </p>
             <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;">If the button doesn't work, copy and paste this link:</p>
@@ -72,12 +138,16 @@ const renderVerifyEmailText = ({
   firstName = "there",
   verifyUrl,
   brandName = "Marian Alumni Network",
-}: Required<Pick<Payload, "verifyUrl">> & Partial<Payload>) => `
+  content,
+}: Required<Pick<Payload, "verifyUrl">> & Partial<Payload> & { content: EmailContent }) => `
 ${brandName}
 
-Hello ${firstName},
+Dear ${firstName},
 
-Thank you for completing the form. To ensure we have the right person, please verify your email address by clicking the link below:
+${content.intro}
+${content.detail}
+
+Click the link below to confirm:
 ${verifyUrl}
 
 If you did not request this, you can safely ignore this message.
@@ -115,7 +185,25 @@ serve(async (req) => {
     });
   }
 
-  const { to, firstName, brandName, verifyUrl, subject = "Please verify your email", from } = payload;
+  const {
+    to,
+    firstName,
+    brandName,
+    verifyUrl,
+    from,
+    campaignType: campaignTypeRaw,
+    intervalMonths,
+  } = payload;
+
+  const campaignType = campaignTypeRaw === "rapport" ? "rapport" : "initial";
+  const normalizedInterval = isRapportInterval(intervalMonths) ? intervalMonths : null;
+
+  if (campaignType === "rapport" && !normalizedInterval) {
+    return new Response(JSON.stringify({ error: "Missing or invalid 'intervalMonths' for rapport campaign" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   if (!to) {
     return new Response(JSON.stringify({ error: "Missing 'to'" }), {
@@ -125,6 +213,7 @@ serve(async (req) => {
   }
 
   // Generate token and store hash
+  const nowIso = new Date().toISOString();
   const token = crypto.randomUUID();
   const tokenHash = await hashToken(token);
   const finalVerifyUrl = (verifyUrl || `${APP_URL}/verify-email?token=${token}`).trim();
@@ -144,8 +233,11 @@ serve(async (req) => {
     );
   }
 
-  const html = renderVerifyEmailHTML({ firstName, brandName, verifyUrl: finalVerifyUrl });
-  const text = renderVerifyEmailText({ firstName, brandName, verifyUrl: finalVerifyUrl });
+  const content = getEmailContent(campaignType, normalizedInterval);
+  const subject = payload.subject?.trim() || content.subject;
+
+  const html = renderVerifyEmailHTML({ firstName, brandName, verifyUrl: finalVerifyUrl, content });
+  const text = renderVerifyEmailText({ firstName, brandName, verifyUrl: finalVerifyUrl, content });
 
   const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -169,6 +261,34 @@ serve(async (req) => {
       status: 502,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  const normalizedEmail = to.trim().toLowerCase();
+
+  const { error: anchorError } = await supabase
+    .from("verification_email_anchor")
+    .upsert({ email: normalizedEmail, first_sent_at: nowIso }, { onConflict: "email", ignoreDuplicates: true });
+
+  if (anchorError) {
+    console.error("Failed to upsert verification email anchor", anchorError);
+  }
+
+  if (campaignType === "rapport" && normalizedInterval) {
+    const { error: campaignLogError } = await supabase.from("reverification_campaign_log").upsert({
+      email: normalizedEmail,
+      interval_months: normalizedInterval,
+      sent_at: nowIso,
+      campaign_type: "rapport",
+      status: "sent",
+      error: null,
+    }, {
+      onConflict: "email,interval_months,campaign_type",
+      ignoreDuplicates: true,
+    });
+
+    if (campaignLogError) {
+      console.error("Failed to upsert campaign log", campaignLogError);
+    }
   }
 
   const result = await resendRes.json();

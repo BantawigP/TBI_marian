@@ -110,10 +110,25 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
         joinedDate: newMember.joinedDate || new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
         avatarColor: '#FF2B5E',
       });
+
+      // Automatically send an access invitation email after adding the member
+      let emailNote = '';
+      try {
+        const inviteResult = await grantAccess(createdMember.id, createdMember.email, createdMember.role as 'Admin' | 'Manager' | 'Member');
+        if (inviteResult.warning) {
+          emailNote = `\n\nNote: ${inviteResult.warning}. Share the magic link manually if needed.`;
+        } else {
+          emailNote = `\n\nAn access invitation has been sent to ${createdMember.email}.`;
+        }
+      } catch (inviteErr) {
+        console.error('Failed to send invitation email:', inviteErr);
+        emailNote = `\n\nMember was added but the invitation email could not be sent. Use "Grant Access" to retry.`;
+      }
+
       await loadTeamMembers();
       openAlert({
         title: 'Member added',
-        message: `Member added successfully, ${createdMember.lastName}, ${createdMember.firstName}.`,
+        message: `Member added successfully, ${createdMember.lastName}, ${createdMember.firstName}.${emailNote}`,
         tone: 'success',
       });
       setShowAddModal(false);

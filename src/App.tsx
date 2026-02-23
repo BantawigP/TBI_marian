@@ -494,7 +494,12 @@ export default function App() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!isMounted) return;
 
-      if (data.session && !rememberMe() && !loginInitiated()) {
+      // After a Google OAuth flow, auth_method is set to 'oauth'.
+      // Treat the session as valid regardless of rememberMe so the user isn't
+      // immediately signed out before onAuthStateChange can fire SIGNED_IN.
+      const isOAuthReturn = localStorage.getItem('auth_method') === 'oauth';
+
+      if (data.session && !rememberMe() && !loginInitiated() && !isOAuthReturn) {
         await supabase.auth.signOut();
         setIsLoggedIn(false);
         return;
@@ -506,7 +511,7 @@ export default function App() {
         setCurrentUserName(name);
       }
 
-      setIsLoggedIn(rememberMe() ? !!data.session : false);
+      setIsLoggedIn(rememberMe() || isOAuthReturn ? !!data.session : false);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
@@ -553,7 +558,7 @@ export default function App() {
           // Check directly against the teams table (no Edge Function needed)
           const { data: teamRow, error: teamError } = await supabase
             .from('teams')
-            .select('id, is_active')
+            .select('id, has_access')
             .ilike('email', googleEmail)
             .maybeSingle();
 
@@ -561,7 +566,7 @@ export default function App() {
             console.error('Teams lookup error after Google OAuth:', teamError);
           }
 
-          const isAllowed = Boolean(teamRow?.id) && teamRow?.is_active !== false;
+          const isAllowed = Boolean(teamRow?.id) && Boolean(teamRow?.has_access);
 
           if (!isAllowed) {
             await supabase.auth.signOut();
@@ -602,13 +607,20 @@ export default function App() {
   const fetchCurrentUserRole = async () => {
     setIsRoleLoading(true);
     try {
-      // Try getUser first; fall back to session user (avoids AuthSessionMissingError on OAuth)
+      // Try getUser first; fall back to session user (avoids AuthSessionMissingError on OAuth).
+      // getUser() makes a network call to validate the token — it throws
+      // AuthSessionMissingError when the OAuth session hasn't fully committed to
+      // the SDK's in-memory state yet. Always treat this error as a soft fallback.
       let authUser: any = null;
       let accessToken: string | null = null;
 
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (!userError && userData?.user) {
-        authUser = userData.user;
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (!userError && userData?.user) {
+          authUser = userData.user;
+        }
+      } catch {
+        // AuthSessionMissingError — session not yet in SDK memory; will use fallbacks below
       }
 
       // Always grab the session to get the access token (needed for edge function fallback)
@@ -663,7 +675,7 @@ export default function App() {
         .from('teams')
         .select('id, email, first_name, last_name, roles(role_name)')
         .eq('user_id', authUser.id)
-        .or('is_active.eq.true,is_active.is.null')
+        .or('has_access.eq.true,has_access.is.null')
         .maybeSingle();
 
       if (!byUserIdError && byUserId) {
@@ -675,7 +687,7 @@ export default function App() {
             .from('teams')
             .select('id, email, first_name, last_name, roles(role_name)')
             .ilike('email', userEmail)
-            .or('is_active.eq.true,is_active.is.null')
+            .or('has_access.eq.true,has_access.is.null')
             .maybeSingle();
 
           if (byEmailError) {
@@ -759,6 +771,11 @@ export default function App() {
     if (!isLoggedIn) {
       setCurrentUserRole(null);
       return;
+    }
+
+    // Fix the URL after a Google OAuth callback without a page reload
+    if (window.location.pathname === '/auth/callback') {
+      window.history.replaceState({}, '', '/');
     }
 
     fetchCurrentUserRole();
@@ -1336,6 +1353,9 @@ export default function App() {
 
     clearCachedSession();
     cachedSessionRef.current = null;
+    localStorage.removeItem('auth_method');
+    localStorage.removeItem('login_initiated');
+    localStorage.removeItem('pending_google_oauth');
     setIsLoggedIn(false);
     setActiveTab('home');
     setShowForm(false);
@@ -1818,6 +1838,38 @@ export default function App() {
 
   // Show login page if not logged in
   if (!isLoggedIn && !showClaimAccess) {
+    // While Google OAuth code is being exchanged at /auth/callback, show a
+    // spinner instead of flashing the Login form. onAuthStateChange will fire
+    // SIGNED_IN once the exchange completes and setIsLoggedIn(true) will run.
+    if (window.location.pathname === '/auth/callback') {
+      return (
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #F5F1ED, #FFF5F8, #FFE8EF)',
+          }}
+        >
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              border: '4px solid #FFB3C6',
+              borderTopColor: '#FF2B5E',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }}
+          />
+          <p style={{ marginTop: 16, color: '#FF2B5E', fontWeight: 600, fontSize: 15 }}>
+            Signing you in with Google…
+          </p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      );
+    }
     return <Login onLogin={handleLogin} />;
   }
 

@@ -394,7 +394,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                     <input
                       type="text"
                       value={formData.firstName}
-                      onChange={(e) => handleChange('firstName', e.target.value)}
+                      onChange={(e) => handleChange('firstName', e.target.value.replace(/[0-9]/g, ''))}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                       required
                     />
@@ -407,7 +407,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                     <input
                       type="text"
                       value={formData.lastName}
-                      onChange={(e) => handleChange('lastName', e.target.value)}
+                      onChange={(e) => handleChange('lastName', e.target.value.replace(/[0-9]/g, ''))}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                       required
                     />
@@ -435,7 +435,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">+63</span>
                       <input
                         type="tel"
-                        value={formData.contactNumber.replace(/^\+63\s?/, '')}
+                        value={(formData.contactNumber || '').replace(/^\+63\s?/, '')}
                         onChange={(e) => {
                           const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
                           handleChange('contactNumber', digits ? `+63${digits}` : '');

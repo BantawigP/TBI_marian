@@ -466,6 +466,7 @@ export default function App() {
   } | null>(null);
   const [teamRefreshToken, setTeamRefreshToken] = useState(0);
   const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
+  const [currentUserDepartment, setCurrentUserDepartment] = useState<string | null>(null);
   const [isRoleLoading, setIsRoleLoading] = useState(true);
   // Cache the last valid session token + user from onAuthStateChange.
   // getSession() can return null when device clock is skewed, so we preserve
@@ -673,7 +674,7 @@ export default function App() {
 
       const { data: byUserId, error: byUserIdError } = await supabase
         .from('teams')
-        .select('id, email, first_name, last_name, roles(role_name)')
+        .select('id, email, first_name, last_name, roles(role_name), departments(department_name)')
         .eq('user_id', authUser.id)
         .or('has_access.eq.true,has_access.is.null')
         .maybeSingle();
@@ -685,7 +686,7 @@ export default function App() {
         if (userEmail) {
           const { data: byEmail, error: byEmailError } = await supabase
             .from('teams')
-            .select('id, email, first_name, last_name, roles(role_name)')
+            .select('id, email, first_name, last_name, roles(role_name), departments(department_name)')
             .ilike('email', userEmail)
             .or('has_access.eq.true,has_access.is.null')
             .maybeSingle();
@@ -715,7 +716,7 @@ export default function App() {
           // Re-try the direct lookup now that user_id is linked
           const { data: retryRow } = await supabase
             .from('teams')
-            .select('id, email, first_name, last_name, roles(role_name)')
+            .select('id, email, first_name, last_name, roles(role_name), departments(department_name)')
             .eq('user_id', authUser.id)
             .or('is_active.eq.true,is_active.is.null')
             .maybeSingle();
@@ -726,6 +727,10 @@ export default function App() {
             if (teamName) setCurrentUserName(teamName);
             else setCurrentUserName(derivedName || userEmail || '');
             if (retryRow.email) setCurrentUserEmail(retryRow.email);
+            // Extract department from retry
+            const retryDept = retryRow.departments as { department_name?: string } | { department_name?: string }[] | null;
+            const retryDeptName = Array.isArray(retryDept) ? retryDept[0]?.department_name ?? null : retryDept?.department_name ?? null;
+            setCurrentUserDepartment(retryDeptName);
           } else {
             // RLS still blocks retry — use edge function role and derived profile
             setCurrentUserName(derivedName || userEmail || '');
@@ -743,6 +748,13 @@ export default function App() {
         ? rolesData[0]?.role_name ?? null
         : rolesData?.role_name ?? null;
       setCurrentUserRole((roleName as TeamRole | null) ?? null);
+
+      // Extract department
+      const deptData = roleRow?.departments as { department_name?: string } | { department_name?: string }[] | null;
+      const deptName = Array.isArray(deptData)
+        ? deptData[0]?.department_name ?? null
+        : deptData?.department_name ?? null;
+      setCurrentUserDepartment(deptName);
 
       if (roleRow) {
         const teamName = `${roleRow.first_name ?? ''} ${roleRow.last_name ?? ''}`.trim();
@@ -1980,6 +1992,7 @@ export default function App() {
               refreshToken={teamRefreshToken}
               onArchived={handleArchiveTeamMemberLocal}
               currentUserRole={currentUserRole}
+              currentUserDepartment={currentUserDepartment}
               isRoleLoading={isRoleLoading}
             />
           ) : activeTab === 'preview' ? (

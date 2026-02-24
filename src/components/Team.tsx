@@ -737,10 +737,13 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                   <input
                     type="text"
                     value={newMember.department}
-                    onChange={(e) => setNewMember({ ...newMember, department: e.target.value })}
+                    onChange={(e) => {
+                      setNewMember({ ...newMember, department: e.target.value });
+                      setShowDeptDropdown(true);
+                    }}
+                    onFocus={() => setShowDeptDropdown(true)}
                     className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                    placeholder="Select department"
-                    readOnly
+                    placeholder="Type or select department"
                   />
                   <button
                     type="button"
@@ -753,19 +756,23 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                 </div>
                 {showDeptDropdown && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {departments.map((dept) => (
-                      <button
-                        key={dept.id}
-                        type="button"
-                        onClick={() => {
-                          setNewMember({ ...newMember, department: dept.department_name });
-                          setShowDeptDropdown(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
-                      >
-                        {dept.department_name}
-                      </button>
-                    ))}
+                    {departments
+                      .filter((dept) =>
+                        dept.department_name.toLowerCase().includes(newMember.department.toLowerCase())
+                      )
+                      .map((dept) => (
+                        <button
+                          key={dept.id}
+                          type="button"
+                          onClick={() => {
+                            setNewMember({ ...newMember, department: dept.department_name });
+                            setShowDeptDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                        >
+                          {dept.department_name}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>
@@ -880,10 +887,13 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                   <input
                     type="text"
                     value={editForm.department}
-                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                    onChange={(e) => {
+                      setEditForm({ ...editForm, department: e.target.value });
+                      setShowEditDeptDropdown(true);
+                    }}
+                    onFocus={() => setShowEditDeptDropdown(true)}
                     className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                    placeholder="Select department"
-                    readOnly
+                    placeholder="Type or select department"
                   />
                   <button
                     type="button"
@@ -896,19 +906,23 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                 </div>
                 {showEditDeptDropdown && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {departments.map((dept) => (
-                      <button
-                        key={dept.id}
-                        type="button"
-                        onClick={() => {
-                          setEditForm({ ...editForm, department: dept.department_name });
-                          setShowEditDeptDropdown(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
-                      >
-                        {dept.department_name}
-                      </button>
-                    ))}
+                    {departments
+                      .filter((dept) =>
+                        dept.department_name.toLowerCase().includes(editForm.department.toLowerCase())
+                      )
+                      .map((dept) => (
+                        <button
+                          key={dept.id}
+                          type="button"
+                          onClick={() => {
+                            setEditForm({ ...editForm, department: dept.department_name });
+                            setShowEditDeptDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                        >
+                          {dept.department_name}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>

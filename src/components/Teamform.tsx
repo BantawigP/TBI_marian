@@ -1,6 +1,7 @@
-import { useState} from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { TeamMember } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 interface TeamFormProps {
   teamMember?: TeamMember | null;
@@ -22,6 +23,20 @@ export function TeamForm({ teamMember, onClose, onSave }: TeamFormProps) {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [departments, setDepartments] = useState<{ id: number; department_name: string }[]>([]);
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, department_name')
+        .order('department_name');
+      if (!error && data) {
+        setDepartments(data);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -188,17 +203,22 @@ export function TeamForm({ teamMember, onClose, onSave }: TeamFormProps) {
                 <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">
                   Department <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   id="department"
                   name="department"
                   value={formData.department}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 ${
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 bg-white ${
                     errors.department ? 'border-red-500' : 'border-gray-200'
                   }`}
-                  placeholder="Engineering"
-                />
+                >
+                  <option value="">Select department</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.department_name}>
+                      {dept.department_name}
+                    </option>
+                  ))}
+                </select>
                 {errors.department && (
                   <p className="mt-1 text-sm text-red-500">{errors.department}</p>
                 )}

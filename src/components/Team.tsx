@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key } from 'lucide-react';
+import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key, ChevronDown } from 'lucide-react';
 import type { TeamMember, TeamRole } from '../types';
 import { fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember, grantAccess } from '../lib/teamService';
+import { supabase } from '../lib/supabaseClient';
 import { PopupDialog } from './PopupDialog';
 
 interface TeamProps {
@@ -37,6 +38,11 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
     department: '',
     joinedDate: '',
   });
+  const [departments, setDepartments] = useState<{ id: number; department_name: string }[]>([]);
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+  const [showEditDeptDropdown, setShowEditDeptDropdown] = useState(false);
+  const deptDropdownRef = useRef<HTMLDivElement>(null);
+  const editDeptDropdownRef = useRef<HTMLDivElement>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editForm, setEditForm] = useState({
     firstName: '',
@@ -50,6 +56,34 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
   useEffect(() => {
     loadTeamMembers();
   }, [refreshToken]);
+
+  // Load departments from database
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, department_name')
+        .order('department_name');
+      if (!error && data) {
+        setDepartments(data);
+      }
+    };
+    fetchDepartments();
+  }, []);
+
+  // Close department dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(event.target as Node)) {
+        setShowDeptDropdown(false);
+      }
+      if (editDeptDropdownRef.current && !editDeptDropdownRef.current.contains(event.target as Node)) {
+        setShowEditDeptDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadTeamMembers = async () => {
     try {
@@ -695,17 +729,45 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                 />
               </div>
 
-              <div>
+              <div ref={deptDropdownRef} className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Department
                 </label>
-                <input
-                  type="text"
-                  value={newMember.department}
-                  onChange={(e) => setNewMember({ ...newMember, department: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                  placeholder="Enter department"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={newMember.department}
+                    onChange={(e) => setNewMember({ ...newMember, department: e.target.value })}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="Select department"
+                    readOnly
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDeptDropdown(!showDeptDropdown)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                    title="Select department"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showDeptDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {departments.map((dept) => (
+                      <button
+                        key={dept.id}
+                        type="button"
+                        onClick={() => {
+                          setNewMember({ ...newMember, department: dept.department_name });
+                          setShowDeptDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                      >
+                        {dept.department_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -810,17 +872,45 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                 />
               </div>
 
-              <div>
+              <div ref={editDeptDropdownRef} className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Department
                 </label>
-                <input
-                  type="text"
-                  value={editForm.department}
-                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                  placeholder="Enter department"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editForm.department}
+                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="Select department"
+                    readOnly
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditDeptDropdown(!showEditDeptDropdown)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                    title="Select department"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showEditDeptDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {departments.map((dept) => (
+                      <button
+                        key={dept.id}
+                        type="button"
+                        onClick={() => {
+                          setEditForm({ ...editForm, department: dept.department_name });
+                          setShowEditDeptDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                      >
+                        {dept.department_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

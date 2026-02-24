@@ -10,10 +10,11 @@ interface TeamProps {
   refreshToken?: number;
   onArchived?: (member: TeamMember) => void;
   currentUserRole?: TeamRole | null;
+  currentUserDepartment?: string | null;
   isRoleLoading?: boolean;
 }
 
-export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading }: TeamProps) {
+export function Team({ refreshToken, onArchived, currentUserRole, currentUserDepartment, isRoleLoading }: TeamProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -323,8 +324,14 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
     }
   };
 
+  // Filter team members based on role visibility
+  // Managers can only see members in their own department (not Admins)
+  const visibleMembers = currentUserRole === 'Manager'
+    ? teamMembers.filter((m) => m.role !== 'Admin' && m.department === currentUserDepartment)
+    : teamMembers;
+
   // Filter team members
-  const filteredMembers = teamMembers.filter((member) => {
+  const filteredMembers = visibleMembers.filter((member) => {
     const matchesSearch =
       `${member.firstName} ${member.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -334,13 +341,13 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
   });
 
   // Calculate statistics
-  const totalMembers = teamMembers.length;
-  const adminCount = teamMembers.filter((m) => m.role === 'Admin').length;
-  const managerCount = teamMembers.filter((m) => m.role === 'Manager').length;
-  const memberCount = teamMembers.filter((m) => m.role === 'Member').length;
+  const totalMembers = visibleMembers.length;
+  const adminCount = visibleMembers.filter((m) => m.role === 'Admin').length;
+  const managerCount = visibleMembers.filter((m) => m.role === 'Manager').length;
+  const memberCount = visibleMembers.filter((m) => m.role === 'Member').length;
 
   // Group by department
-  const departmentStats = teamMembers.reduce((acc, member) => {
+  const departmentStats = visibleMembers.reduce((acc, member) => {
     const dept = member.department || 'Unassigned';
     acc[dept] = (acc[dept] || 0) + 1;
     return acc;
@@ -438,7 +445,8 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
           <p className="text-sm text-gray-600">Total Members</p>
         </div>
 
-        {/* Admins */}
+        {/* Admins - Only show for Admins */}
+        {currentUserRole === 'Admin' && (
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -448,6 +456,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
           <h3 className="text-2xl font-semibold text-gray-900 mb-1">{adminCount}</h3>
           <p className="text-sm text-gray-600">Admins</p>
         </div>
+        )}
 
         {/* Managers */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
@@ -494,7 +503,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
             className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white"
           >
             <option value="all">All Roles</option>
-            <option value="Admin">Admin</option>
+            {currentUserRole === 'Admin' && <option value="Admin">Admin</option>}
             <option value="Manager">Manager</option>
             <option value="Member">Member</option>
           </select>

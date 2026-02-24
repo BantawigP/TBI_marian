@@ -939,6 +939,14 @@ export default function App() {
       ensureEmailId(contact.email, contact.status),
     ]);
 
+    // Map AlumniType slug → numeric alumni_type_id
+    // 'graduate' → 1, 'marian_graduate' → 2 (matches FALLBACK_ALUMNI_TYPES in ContactForm)
+    const alumniTypeIdMap: Record<string, number> = {
+      graduate: 1,
+      marian_graduate: 2,
+    };
+    const alumniTypeId = contact.alumniType ? (alumniTypeIdMap[contact.alumniType] ?? null) : null;
+
     const payload: Record<string, any> = {
       f_name: contact.firstName,
       l_name: contact.lastName,
@@ -949,6 +957,7 @@ export default function App() {
       company_id: companyId,
       occupation_id: occupationId,
       contact_number: cleanPhone(contact.contactNumber),
+      alumni_type_id: alumniTypeId,
     };
 
     const alumniId = numberOrNull(contact.alumniId ?? contact.id);

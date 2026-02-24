@@ -693,7 +693,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, currentUserDep
                 <input
                   type="text"
                   value={newMember.firstName}
-                  onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value })}
+                  onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value.replace(/[0-9]/g, '') })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                   placeholder="Enter first name"
                 />
@@ -706,7 +706,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, currentUserDep
                 <input
                   type="text"
                   value={newMember.lastName}
-                  onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value })}
+                  onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value.replace(/[0-9]/g, '') })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                   placeholder="Enter last name"
                 />
@@ -850,7 +850,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, currentUserDep
                 <input
                   type="text"
                   value={editForm.firstName}
-                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value.replace(/[0-9]/g, '') })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                   placeholder="Enter first name"
                 />
@@ -863,7 +863,7 @@ export function Team({ refreshToken, onArchived, currentUserRole, currentUserDep
                 <input
                   type="text"
                   value={editForm.lastName}
-                  onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                  onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value.replace(/[0-9]/g, '') })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
                   placeholder="Enter last name"
                 />

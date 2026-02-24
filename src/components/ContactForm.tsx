@@ -1,5 +1,5 @@
-import { X, Plus, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { X, Plus, Loader2, ChevronDown } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
 import type { Contact, ContactStatus, AlumniType } from '../types';
 import { supabase } from '../lib/supabaseClient';
 
@@ -61,6 +61,9 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     occupation: [],
   });
   const [addingKey, setAddingKey] = useState<DimensionKey | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<DimensionKey | null>(null);
+  const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const justSelectedRef = useRef(false);
 
   const handleChange = (field: keyof Contact, value: string) => {
     setFormData((prev) => {
@@ -128,6 +131,20 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdown) {
+        const ref = dropdownRefs.current[openDropdown];
+        if (ref && !ref.contains(event.target as Node)) {
+          setOpenDropdown(null);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdown]);
+
   const handleAddDimension = async (key: DimensionKey, value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -176,40 +193,69 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
     key: DimensionKey,
     label: string,
     placeholder: string,
-    required?: boolean
+    required?: boolean,
+    showAdd: boolean = true
   ) => {
     const value = (formData as unknown as Record<string, string | undefined>)[key] ?? '';
     const trimmed = value.trim();
     const normalizedValue = trimmed.toLowerCase();
-    const matches = trimmed
-      ? dimensionOptions[key]
-          .filter((opt) => opt.label.toLowerCase().startsWith(normalizedValue))
-          .slice(0, 8)
-      : [];
+    const isDropdownOpen = openDropdown === key;
+    const filteredOptions = dimensionOptions[key].filter((opt) =>
+      opt.label.toLowerCase().includes(normalizedValue)
+    );
     const canAdd = Boolean(trimmed) &&
       !dimensionOptions[key].some((opt) => opt.label.toLowerCase() === normalizedValue);
 
+    // Show dropdown list only when explicitly opened
+    const showList = isDropdownOpen;
+    const displayOptions = trimmed
+      ? filteredOptions
+      : dimensionOptions[key];
+
     return (
-      <div>
+      <div ref={(el) => { dropdownRefs.current[key] = el; }} className="relative">
         <label className="block text-sm text-[#FF2B5E] mb-2">{label}</label>
         <div className="flex gap-2 items-start">
           <div className="flex-1">
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => handleChange(key, e.target.value)}
-              placeholder={placeholder}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-              required={required}
-            />
-            {Boolean(trimmed) && matches.length > 0 && (
-              <div className="mt-1 border border-gray-200 rounded-lg bg-white shadow-sm max-h-40 overflow-y-auto">
-                {matches.map((opt) => (
+            <div className="relative">
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => {
+                  handleChange(key, e.target.value);
+                  setOpenDropdown(key);
+                }}
+                onFocus={() => {
+                  if (!justSelectedRef.current) {
+                    setOpenDropdown(key);
+                  }
+                  justSelectedRef.current = false;
+                }}
+                placeholder={placeholder}
+                className="w-full px-4 py-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                required={required}
+              />
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(isDropdownOpen ? null : key)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                title={`Select ${label.toLowerCase()}`}
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+            {showList && displayOptions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 border border-gray-200 rounded-lg bg-white shadow-lg max-h-48 overflow-y-auto">
+                {displayOptions.map((opt) => (
                   <button
                     key={opt.id}
                     type="button"
-                    onClick={() => handleChange(key, opt.label)}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => {
+                      handleChange(key, opt.label);
+                      justSelectedRef.current = true;
+                      setOpenDropdown(null);
+                    }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
                   >
                     {opt.label}
                   </button>
@@ -217,7 +263,7 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
               </div>
             )}
           </div>
-          {canAdd && (
+          {showAdd && canAdd && (
             <button
               type="button"
               onClick={() => handleAddDimension(key, trimmed)}
@@ -434,11 +480,11 @@ export function ContactForm({ contact, existingContacts, onClose, onSave }: Cont
                   </div>
                 </div>
 
-                {renderSuggestionField('college', 'College', 'Select or add a college', true)}
-                {renderSuggestionField('program', 'Program', 'Select or add a program', true)}
-                {renderSuggestionField('company', 'Company Name', 'Select or add a company')}
-                {renderSuggestionField('address', 'Address / Location', 'Select or add an address')}
-                {renderSuggestionField('occupation', 'Occupation', 'Select or add an occupation')}
+                {renderSuggestionField('college', 'College', 'Select a college', true, false)}
+                {renderSuggestionField('program', 'Program', 'Select a program', true, false)}
+                {renderSuggestionField('company', 'Company Name', 'Select a company', false, false)}
+                {renderSuggestionField('address', 'Address / Location', 'Select an address', false, false)}
+                {renderSuggestionField('occupation', 'Occupation', 'Select an occupation', false, false)}
 
                 <div>
                   <label className="block text-sm text-[#FF2B5E] mb-2">

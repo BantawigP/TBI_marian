@@ -720,13 +720,20 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Phone
                 </label>
-                <input
-                  type="tel"
-                  value={newMember.phone}
-                  onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                  placeholder="+63 XXX XXX XXXX"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">+63</span>
+                  <input
+                    type="tel"
+                    value={newMember.phone.replace(/^\+63\s?/, '')}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setNewMember({ ...newMember, phone: digits ? `+63${digits}` : '' });
+                    }}
+                    className="w-full pl-12 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="9XX XXX XXXX"
+                    maxLength={12}
+                  />
+                </div>
               </div>
 
               <div ref={deptDropdownRef} className="relative">
@@ -870,13 +877,20 @@ export function Team({ refreshToken, onArchived, currentUserRole, isRoleLoading 
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Phone
                 </label>
-                <input
-                  type="tel"
-                  value={editForm.phone}
-                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                  placeholder="+63 XXX XXX XXXX"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">+63</span>
+                  <input
+                    type="tel"
+                    value={editForm.phone.replace(/^\+63\s?/, '')}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setEditForm({ ...editForm, phone: digits ? `+63${digits}` : '' });
+                    }}
+                    className="w-full pl-12 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="9XX XXX XXXX"
+                    maxLength={12}
+                  />
+                </div>
               </div>
 
               <div ref={editDeptDropdownRef} className="relative">

@@ -1,5 +1,5 @@
 import { X, Lightbulb, Users, FileText, Award, Mail, Phone } from 'lucide-react';
-import { Incubatee } from './components/IncubateeTable';
+import { Incubatee } from './IncubateeTable';
 
 interface ViewIncubateeProps {
   incubatee: Incubatee;

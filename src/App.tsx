@@ -18,7 +18,14 @@ import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
 import { PopupDialog } from './components/PopupDialog';
 import { PersonalSettings } from './components/PersonalSettings';
-import { Plus, Upload, Download, Trash2 } from 'lucide-react';
+import { Incubatee, Founder } from './components/IncubateeTable';
+import { IncubateeCards } from './components/IncubateeCards';
+import { IncubateeForm } from './components/IncubateeForm';
+import { ViewIncubatee } from './components/ViewIncubatee';
+import { ViewFounder } from './components/ViewFounder';
+import { AddFounderModal } from './components/AddFounderModal';
+import { FoundersTable } from './components/FoundersTable';
+import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb } from 'lucide-react';
 import type { Contact, ContactStatus, Event, RsvpStatus, AlumniType, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
@@ -475,6 +482,17 @@ export default function App() {
   const [showPersonalSettings, setShowPersonalSettings] = useState(false);
   const [currentUserName, setCurrentUserName] = useState('');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
+
+  // Incubatee state
+  const [incubatees, setIncubatees] = useState<Incubatee[]>([]);
+  const [selectedIncubatees, setSelectedIncubatees] = useState<string[]>([]);
+  const [showIncubateeForm, setShowIncubateeForm] = useState(false);
+  const [editingIncubatee, setEditingIncubatee] = useState<Incubatee | null>(null);
+  const [viewingIncubatee, setViewingIncubatee] = useState<Incubatee | null>(null);
+  const [viewingFounder, setViewingFounder] = useState<{ founder: Founder; incubatee: Incubatee } | null>(null);
+  const [showAddFounderModal, setShowAddFounderModal] = useState(false);
+  const [incubateeViewMode, setIncubateeViewMode] = useState<'cards' | 'founders'>('cards');
+  const [showDeleteIncubateeConfirm, setShowDeleteIncubateeConfirm] = useState(false);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
   // Check if URL contains claim-access token
@@ -1392,6 +1410,15 @@ export default function App() {
     setCurrentUserName('');
     setCurrentUserEmail('');
     setHasExistingPassword(false);
+    // Reset incubatee state
+    setIncubatees([]);
+    setSelectedIncubatees([]);
+    setShowIncubateeForm(false);
+    setEditingIncubatee(null);
+    setViewingIncubatee(null);
+    setViewingFounder(null);
+    setShowAddFounderModal(false);
+    setShowDeleteIncubateeConfirm(false);
     localStorage.removeItem('auth_method');
   };
 
@@ -1401,6 +1428,77 @@ export default function App() {
     setGraduatedTo('');
     setStatusFilter('all');
     setSelectedContacts([]);
+  };
+
+  // ─── Incubatee Handlers ───
+
+  const allFounders = incubatees.flatMap((inc) => inc.founders);
+
+  const handleNewIncubatee = () => {
+    setEditingIncubatee(null);
+    setShowIncubateeForm(true);
+  };
+
+  const handleEditIncubatee = (incubatee: Incubatee) => {
+    setViewingIncubatee(null);
+    setEditingIncubatee(incubatee);
+    setShowIncubateeForm(true);
+  };
+
+  const handleSaveIncubatee = (incubatee: Incubatee) => {
+    setIncubatees((prev) => {
+      const exists = prev.find((i) => i.id === incubatee.id);
+      if (exists) {
+        return prev.map((i) => (i.id === incubatee.id ? incubatee : i));
+      }
+      return [...prev, incubatee];
+    });
+    setShowIncubateeForm(false);
+    setEditingIncubatee(null);
+  };
+
+  const handleViewIncubatee = (incubatee: Incubatee) => {
+    setViewingIncubatee(incubatee);
+  };
+
+  const handleDeleteIncubatees = () => {
+    setIncubatees((prev) => prev.filter((i) => !selectedIncubatees.includes(i.id)));
+    setSelectedIncubatees([]);
+    setShowDeleteIncubateeConfirm(false);
+  };
+
+  const handleViewFounder = (founder: Founder, incubatee: Incubatee) => {
+    setViewingFounder({ founder, incubatee });
+  };
+
+  const handleSaveFounder = (updatedFounder: Founder) => {
+    if (!viewingFounder) return;
+    setIncubatees((prev) =>
+      prev.map((inc) => {
+        if (inc.id === viewingFounder.incubatee.id) {
+          return {
+            ...inc,
+            founders: inc.founders.map((f) =>
+              f.id === updatedFounder.id ? updatedFounder : f
+            ),
+          };
+        }
+        return inc;
+      })
+    );
+    setViewingFounder(null);
+  };
+
+  const handleAddFounderToIncubatee = (incubateeId: string, founder: Founder) => {
+    setIncubatees((prev) =>
+      prev.map((inc) => {
+        if (inc.id === incubateeId) {
+          return { ...inc, founders: [...inc.founders, founder] };
+        }
+        return inc;
+      })
+    );
+    setShowAddFounderModal(false);
   };
 
   const handleNewContact = () => {
@@ -1995,6 +2093,111 @@ export default function App() {
               currentUserDepartment={currentUserDepartment}
               isRoleLoading={isRoleLoading}
             />
+          ) : activeTab === 'incubatees' ? (
+            <>
+              {/* Header */}
+              <div className="mb-8">
+                <h1 className="text-3xl mb-6">Manage Incubatees</h1>
+
+                {/* Action Buttons + View Toggle */}
+                <div className="flex items-center gap-3 mb-6">
+                  {incubateeViewMode === 'cards' ? (
+                    <>
+                      <button
+                        onClick={handleNewIncubatee}
+                        className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        New
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (selectedIncubatees.length > 0) setShowDeleteIncubateeConfirm(true);
+                        }}
+                        disabled={selectedIncubatees.length === 0}
+                        className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowAddFounderModal(true)}
+                        className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Founder
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (selectedIncubatees.length > 0) setShowDeleteIncubateeConfirm(true);
+                        }}
+                        disabled={selectedIncubatees.length === 0}
+                        className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </>
+                  )}
+
+                  {/* View Toggle */}
+                  <div className="ml-auto flex items-center gap-0 bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setIncubateeViewMode('cards')}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        incubateeViewMode === 'cards'
+                          ? 'bg-[#FF2B5E] text-white shadow-sm'
+                          : 'text-gray-600 hover:text-gray-800'
+                      }`}
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                      Cards
+                    </button>
+                    <button
+                      onClick={() => setIncubateeViewMode('founders')}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        incubateeViewMode === 'founders'
+                          ? 'bg-[#FF2B5E] text-white shadow-sm'
+                          : 'text-gray-600 hover:text-gray-800'
+                      }`}
+                    >
+                      <List className="w-4 h-4" />
+                      Founders
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              {incubateeViewMode === 'cards' ? (
+                incubatees.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                    <Lightbulb className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No incubatees yet</h3>
+                    <p className="text-gray-500 mb-4">Get started by adding your first incubatee startup.</p>
+                    <button
+                      onClick={handleNewIncubatee}
+                      className="inline-flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Incubatee
+                    </button>
+                  </div>
+                ) : (
+                  <IncubateeCards
+                    incubatees={incubatees}
+                    selectedIncubatees={selectedIncubatees}
+                    setSelectedIncubatees={setSelectedIncubatees}
+                    onViewIncubatee={handleViewIncubatee}
+                  />
+                )
+              ) : (
+                <FoundersTable incubatees={incubatees} />
+              )}
+            </>
           ) : activeTab === 'preview' ? (
             <FormPreview />
           ) : activeTab === 'contacts' ? (
@@ -2158,6 +2361,75 @@ export default function App() {
             localStorage.setItem('auth_method', 'password');
           }}
         />
+      )}
+
+      {/* Incubatee Form Modal */}
+      {showIncubateeForm && (
+        <IncubateeForm
+          incubatee={editingIncubatee}
+          allFounders={allFounders}
+          onSave={handleSaveIncubatee}
+          onClose={() => {
+            setShowIncubateeForm(false);
+            setEditingIncubatee(null);
+          }}
+        />
+      )}
+
+      {/* View Incubatee Modal */}
+      {viewingIncubatee && (
+        <ViewIncubatee
+          incubatee={viewingIncubatee}
+          onClose={() => setViewingIncubatee(null)}
+          onEdit={handleEditIncubatee}
+        />
+      )}
+
+      {/* View Founder Modal */}
+      {viewingFounder && (
+        <ViewFounder
+          founder={viewingFounder.founder}
+          incubatee={viewingFounder.incubatee}
+          onClose={() => setViewingFounder(null)}
+          onSave={handleSaveFounder}
+        />
+      )}
+
+      {/* Add Founder Modal */}
+      {showAddFounderModal && (
+        <AddFounderModal
+          incubatees={incubatees}
+          onClose={() => setShowAddFounderModal(false)}
+          onSave={handleAddFounderToIncubatee}
+        />
+      )}
+
+      {/* Delete Incubatee Confirmation */}
+      {showDeleteIncubateeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-900">Delete incubatees?</h3>
+            <p className="text-gray-600">
+              This will permanently delete {selectedIncubatees.length} incubatee(s) and their associated founders.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteIncubateeConfirm(false)}
+                className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteIncubatees}
+                className="px-5 py-2.5 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete confirmation */}

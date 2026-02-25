@@ -344,7 +344,7 @@ export function FormPreview() {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-2xl font-semibold">Marian TBI Connect</h2>
+                <h2 className="text-2xl font-semibold">MARIAN TBI Connect</h2>
                 <p className="text-white/90">Alumni Information Form</p>
               </div>
             </div>

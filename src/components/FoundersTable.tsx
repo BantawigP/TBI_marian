@@ -1,5 +1,5 @@
 import { Mail, Phone, Briefcase } from 'lucide-react';
-import { Incubatee } from './IncubateeTable';
+import { Incubatee, Founder } from './IncubateeTable';
 
 interface FounderRow {
   founderId: string;
@@ -9,15 +9,16 @@ interface FounderRow {
   role: string;
   startupName: string;
   cohortLevel: number;
-  status: Incubatee['status'];
+  status: Incubatee['status'] | '—';
 }
 
 interface FoundersTableProps {
   incubatees: Incubatee[];
+  unassignedFounders?: Founder[];
   onViewFounder?: (founder: FounderRow) => void;
 }
 
-export function FoundersTable({ incubatees, onViewFounder }: FoundersTableProps) {
+export function FoundersTable({ incubatees, unassignedFounders = [], onViewFounder }: FoundersTableProps) {
   const getStatusColor = (status: Incubatee['status']) => {
     switch (status) {
       case 'Graduate':
@@ -34,18 +35,30 @@ export function FoundersTable({ incubatees, onViewFounder }: FoundersTableProps)
   };
 
   // Flatten all founders from all incubatees into rows
-  const founderRows: FounderRow[] = incubatees.flatMap((incubatee) =>
-    incubatee.founders.map((founder) => ({
+  const founderRows: FounderRow[] = [
+    ...incubatees.flatMap((incubatee) =>
+      incubatee.founders.map((founder) => ({
+        founderId: founder.id,
+        name: founder.name,
+        email: founder.email,
+        phone: founder.phone,
+        role: founder.role,
+        startupName: incubatee.startupName,
+        cohortLevel: incubatee.cohortLevel,
+        status: incubatee.status,
+      }))
+    ),
+    ...unassignedFounders.map((founder) => ({
       founderId: founder.id,
       name: founder.name,
       email: founder.email,
       phone: founder.phone,
       role: founder.role,
-      startupName: incubatee.startupName,
-      cohortLevel: incubatee.cohortLevel,
-      status: incubatee.status,
-    }))
-  );
+      startupName: '—',
+      cohortLevel: 0,
+      status: '—' as const,
+    })),
+  ];
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -109,17 +122,23 @@ export function FoundersTable({ incubatees, onViewFounder }: FoundersTableProps)
                 <td className="px-6 py-4">
                   <div>
                     <div className="font-medium text-gray-900 text-sm">{row.startupName}</div>
-                    <div className="text-xs text-gray-500">Cohort {row.cohortLevel}</div>
+                    {row.cohortLevel > 0 && (
+                      <div className="text-xs text-gray-500">Cohort {row.cohortLevel}</div>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                      row.status
-                    )}`}
-                  >
-                    {row.status}
-                  </span>
+                  {row.status !== '—' ? (
+                    <span
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                        row.status as Incubatee['status']
+                      )}`}
+                    >
+                      {row.status}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-400">—</span>
+                  )}
                 </td>
               </tr>
             ))}

@@ -38,6 +38,14 @@ import {
 } from './lib/teamService';
 import { linkMyAccountToTeam } from './lib/linkAccountService';
 import { setCachedSession, clearCachedSession } from './lib/sessionCache';
+import {
+  fetchIncubatees as fetchIncubateesFromSupabase,
+  fetchUnassignedFounders as fetchUnassignedFoundersFromSupabase,
+  saveIncubatee as persistIncubateeToSupabase,
+  deleteIncubatees as deleteIncubateesFromSupabase,
+  addFounderToIncubatee as addFounderToIncubateeInDb,
+  updateFounder as updateFounderInDb,
+} from './lib/incubateeService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -485,6 +493,7 @@ export default function App() {
 
   // Incubatee state
   const [incubatees, setIncubatees] = useState<Incubatee[]>([]);
+  const [unassignedFounders, setUnassignedFounders] = useState<Founder[]>([]);
   const [selectedIncubatees, setSelectedIncubatees] = useState<string[]>([]);
   const [showIncubateeForm, setShowIncubateeForm] = useState(false);
   const [editingIncubatee, setEditingIncubatee] = useState<Incubatee | null>(null);
@@ -1253,12 +1262,14 @@ export default function App() {
       try {
         console.log('🔄 Starting to fetch data from Supabase...');
         
-        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams] = await Promise.all([
+        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams, loadedIncubatees, loadedUnassignedFounders] = await Promise.all([
           fetchContactsFromSupabase(),
           fetchEventsFromSupabase(),
           fetchArchivedContactsFromSupabase(),
           fetchArchivedEventsFromSupabase(),
           fetchArchivedTeamMembersFromSupabase(),
+          fetchIncubateesFromSupabase(),
+          fetchUnassignedFoundersFromSupabase(),
         ]);
 
         console.log('✅ Data fetched successfully!');
@@ -1267,6 +1278,8 @@ export default function App() {
         console.log('  - Archived Contacts:', loadedArchivedContacts.length);
         console.log('  - Archived Events:', loadedArchivedEvents.length);
         console.log('  - Archived Team Members:', loadedArchivedTeams.length);
+        console.log('  - Incubatees:', loadedIncubatees.length);
+        console.log('  - Unassigned Founders:', loadedUnassignedFounders.length);
 
         if (!isMounted) return;
 
@@ -1288,6 +1301,12 @@ export default function App() {
 
         setArchivedTeamMembers(loadedArchivedTeams);
         console.log('✅ Archived team members state updated');
+
+        setIncubatees(loadedIncubatees);
+        console.log('✅ Incubatees state updated');
+
+        setUnassignedFounders(loadedUnassignedFounders);
+        console.log('✅ Unassigned founders state updated');
       } catch (error) {
         console.error('❌ Supabase: failed to load data', error);
         console.error('Error details:', {
@@ -1412,6 +1431,7 @@ export default function App() {
     setHasExistingPassword(false);
     // Reset incubatee state
     setIncubatees([]);
+    setUnassignedFounders([]);
     setSelectedIncubatees([]);
     setShowIncubateeForm(false);
     setEditingIncubatee(null);
@@ -1432,7 +1452,7 @@ export default function App() {
 
   // ─── Incubatee Handlers ───
 
-  const allFounders = incubatees.flatMap((inc) => inc.founders);
+  const allFounders = [...incubatees.flatMap((inc) => inc.founders), ...unassignedFounders];
 
   const handleNewIncubatee = () => {
     setEditingIncubatee(null);
@@ -1445,7 +1465,8 @@ export default function App() {
     setShowIncubateeForm(true);
   };
 
-  const handleSaveIncubatee = (incubatee: Incubatee) => {
+  const handleSaveIncubatee = async (incubatee: Incubatee) => {
+    // Optimistic local update
     setIncubatees((prev) => {
       const exists = prev.find((i) => i.id === incubatee.id);
       if (exists) {
@@ -1453,26 +1474,63 @@ export default function App() {
       }
       return [...prev, incubatee];
     });
+    // Optimistically remove any founders that are now part of this incubatee
+    const founderIdsInIncubatee = new Set(incubatee.founders.map((f) => f.id));
+    setUnassignedFounders((prev) => prev.filter((f) => !founderIdsInIncubatee.has(f.id)));
     setShowIncubateeForm(false);
     setEditingIncubatee(null);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      const saved = await persistIncubateeToSupabase(incubatee);
+      // Replace the optimistic entry with DB-backed one (real IDs)
+      setIncubatees((prev) =>
+        prev.map((i) => (i.id === incubatee.id || i.id === saved.id ? saved : i))
+      );
+      // Remove any founders that were reassigned from the unassigned list
+      const savedFounderIds = new Set(saved.founders.map((f) => f.id));
+      setUnassignedFounders((prev) => prev.filter((f) => !savedFounderIds.has(f.id)));
+      console.log('✅ Incubatee saved to database');
+    } catch (error) {
+      console.error('❌ Failed to save incubatee to database:', error);
+      setSyncError('Incubatee saved locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleViewIncubatee = (incubatee: Incubatee) => {
     setViewingIncubatee(incubatee);
   };
 
-  const handleDeleteIncubatees = () => {
-    setIncubatees((prev) => prev.filter((i) => !selectedIncubatees.includes(i.id)));
+  const handleDeleteIncubatees = async () => {
+    const idsToDelete = [...selectedIncubatees];
+    // Optimistic local removal
+    setIncubatees((prev) => prev.filter((i) => !idsToDelete.includes(i.id)));
     setSelectedIncubatees([]);
     setShowDeleteIncubateeConfirm(false);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      await deleteIncubateesFromSupabase(idsToDelete);
+      console.log(`✅ Deleted ${idsToDelete.length} incubatee(s) from database`);
+    } catch (error) {
+      console.error('❌ Failed to delete incubatees from database:', error);
+      setSyncError('Incubatees deleted locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleViewFounder = (founder: Founder, incubatee: Incubatee) => {
     setViewingFounder({ founder, incubatee });
   };
 
-  const handleSaveFounder = (updatedFounder: Founder) => {
+  const handleSaveFounder = async (updatedFounder: Founder) => {
     if (!viewingFounder) return;
+    // Optimistic update
     setIncubatees((prev) =>
       prev.map((inc) => {
         if (inc.id === viewingFounder.incubatee.id) {
@@ -1487,18 +1545,81 @@ export default function App() {
       })
     );
     setViewingFounder(null);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      const saved = await updateFounderInDb(updatedFounder);
+      setIncubatees((prev) =>
+        prev.map((inc) => {
+          if (inc.id === viewingFounder.incubatee.id) {
+            return {
+              ...inc,
+              founders: inc.founders.map((f) =>
+                f.id === updatedFounder.id || f.id === saved.id ? saved : f
+              ),
+            };
+          }
+          return inc;
+        })
+      );
+      console.log('✅ Founder updated in database');
+    } catch (error) {
+      console.error('❌ Failed to update founder in database:', error);
+      setSyncError('Founder updated locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const handleAddFounderToIncubatee = (incubateeId: string, founder: Founder) => {
-    setIncubatees((prev) =>
-      prev.map((inc) => {
-        if (inc.id === incubateeId) {
-          return { ...inc, founders: [...inc.founders, founder] };
-        }
-        return inc;
-      })
-    );
+  const handleAddFounderToIncubatee = async (incubateeId: string, founder: Founder) => {
+    // Optimistic local update — only attach to incubatee if one was selected
+    if (incubateeId) {
+      setIncubatees((prev) =>
+        prev.map((inc) => {
+          if (inc.id === incubateeId) {
+            return { ...inc, founders: [...inc.founders, founder] };
+          }
+          return inc;
+        })
+      );
+    } else {
+      // No startup selected — track as unassigned founder
+      setUnassignedFounders((prev) => [founder, ...prev]);
+    }
     setShowAddFounderModal(false);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      const savedFounder = await addFounderToIncubateeInDb(incubateeId, founder);
+      // Replace the optimistic founder with DB-backed one
+      if (incubateeId) {
+        setIncubatees((prev) =>
+          prev.map((inc) => {
+            if (inc.id === incubateeId) {
+              return {
+                ...inc,
+                founders: inc.founders.map((f) =>
+                  f.id === founder.id ? savedFounder : f
+                ),
+              };
+            }
+            return inc;
+          })
+        );
+      } else {
+        setUnassignedFounders((prev) =>
+          prev.map((f) => (f.id === founder.id ? savedFounder : f))
+        );
+      }
+      console.log('✅ Founder added to database');
+    } catch (error) {
+      console.error('❌ Failed to add founder to database:', error);
+      setSyncError('Founder added locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleNewContact = () => {
@@ -2195,7 +2316,7 @@ export default function App() {
                   />
                 )
               ) : (
-                <FoundersTable incubatees={incubatees} />
+                <FoundersTable incubatees={incubatees} unassignedFounders={unassignedFounders} />
               )}
             </>
           ) : activeTab === 'preview' ? (

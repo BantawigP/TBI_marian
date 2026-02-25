@@ -1,6 +1,6 @@
 import { Mail, Phone, Briefcase, Building2, Users } from 'lucide-react';
 import { useState } from 'react';
-import { Founder, Incubatee } from './components/IncubateeTable';
+import { Founder, Incubatee } from './IncubateeTable';
 
 interface ViewFounderProps {
   founder: Founder;

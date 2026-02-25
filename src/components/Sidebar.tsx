@@ -1,4 +1,4 @@
-import { Home, Users, Calendar, Archive, FileText, LogOut, UserCog } from 'lucide-react';
+import { Home, Users, Calendar, Archive, FileText, LogOut, UserCog, Lightbulb } from 'lucide-react';
 import type { TeamRole } from '../types';
 import logo from '../assets/marian tbi.jpg';
 
@@ -26,10 +26,11 @@ export function Sidebar({
   const navItems = [
     { icon: Home, label: 'Home', value: 'home' },
     { icon: Users, label: 'Contacts', value: 'contacts' },
-    { icon: UserCog, label: 'Team', value: 'team' },
+    { icon: Lightbulb, label: 'Incubatee', value: 'incubatees' },
     { icon: Calendar, label: 'Events', value: 'events' },
-    { icon: Archive, label: 'Archives', value: 'archives' },
+    { icon: UserCog, label: 'Team', value: 'team' },
     { icon: FileText, label: 'Form Preview', value: 'preview' },
+    { icon: Archive, label: 'Archives', value: 'archives' },
   ];
 
   const visibleNavItems =

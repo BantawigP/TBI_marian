@@ -67,7 +67,7 @@ export function IncubateeTable({
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-4 text-left">
+              <th className="px-4 py-4 text-left">
                 <input
                   type="checkbox"
                   checked={
@@ -78,19 +78,19 @@ export function IncubateeTable({
                   className="w-4 h-4 text-[#FF2B5E] bg-white border-gray-300 rounded focus:ring-[#FF2B5E] focus:ring-2"
                 />
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Startup Name
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Cohort Level
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Founders
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -101,7 +101,7 @@ export function IncubateeTable({
                 key={incubatee.id}
                 className="hover:bg-gray-50 transition-colors"
               >
-                <td className="px-6 py-4">
+                <td className="px-4 py-4">
                   <input
                     type="checkbox"
                     checked={selectedIncubatees.includes(incubatee.id)}
@@ -109,7 +109,7 @@ export function IncubateeTable({
                     className="w-4 h-4 text-[#FF2B5E] bg-white border-gray-300 rounded focus:ring-[#FF2B5E] focus:ring-2"
                   />
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 py-4">
                   <div>
                     <div className="font-medium text-gray-900">
                       {incubatee.startupName}
@@ -119,12 +119,12 @@ export function IncubateeTable({
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 py-4">
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]">
                     Cohort {incubatee.cohortLevel}
                   </span>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 py-4">
                   <div className="text-sm text-gray-900">
                     {incubatee.founders.slice(0, 2).map(f => f.name).join(', ')}
                     {incubatee.founders.length > 2 && (
@@ -135,7 +135,7 @@ export function IncubateeTable({
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 py-4">
                   <span
                     className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
                       incubatee.status
@@ -144,7 +144,7 @@ export function IncubateeTable({
                     {incubatee.status}
                   </span>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 py-4">
                   <button
                     onClick={() => onViewIncubatee(incubatee)}
                     className="text-[#FF2B5E] hover:text-[#E6275A] transition-colors"

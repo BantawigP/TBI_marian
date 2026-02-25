@@ -51,7 +51,7 @@ export function AddFounderModal({ incubatees, onClose, onSave }: AddFounderModal
             {/* Select Startup */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Startup <span className="text-gray-400 text-xs">(Optional)</span>
+                Select Startup
               </label>
               <select
                 value={formData.incubateeId}

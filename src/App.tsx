@@ -500,7 +500,7 @@ export default function App() {
   const [viewingIncubatee, setViewingIncubatee] = useState<Incubatee | null>(null);
   const [viewingFounder, setViewingFounder] = useState<{ founder: Founder; incubatee: Incubatee } | null>(null);
   const [showAddFounderModal, setShowAddFounderModal] = useState(false);
-  const [incubateeViewMode, setIncubateeViewMode] = useState<'cards' | 'founders'>('cards');
+  const [incubateeViewMode, setIncubateeViewMode] = useState<'Startup' | 'founders'>('Startup');
   const [showDeleteIncubateeConfirm, setShowDeleteIncubateeConfirm] = useState(false);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
@@ -2222,14 +2222,14 @@ export default function App() {
 
                 {/* Action Buttons + View Toggle */}
                 <div className="flex items-center gap-3 mb-6">
-                  {incubateeViewMode === 'cards' ? (
+                  {incubateeViewMode === 'Startup' ? (
                     <>
                       <button
                         onClick={handleNewIncubatee}
                         className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
                       >
                         <Plus className="w-4 h-4" />
-                        New
+                        New Startup
                       </button>
                       <button
                         onClick={() => {
@@ -2267,15 +2267,15 @@ export default function App() {
                   {/* View Toggle */}
                   <div className="ml-auto flex items-center gap-0 bg-gray-100 rounded-lg p-1">
                     <button
-                      onClick={() => setIncubateeViewMode('cards')}
+                      onClick={() => setIncubateeViewMode('Startup')}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                        incubateeViewMode === 'cards'
+                        incubateeViewMode === 'Startup'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
                           : 'text-gray-600 hover:text-gray-800'
                       }`}
                     >
                       <LayoutGrid className="w-4 h-4" />
-                      Cards
+                      Startup
                     </button>
                     <button
                       onClick={() => setIncubateeViewMode('founders')}
@@ -2293,7 +2293,7 @@ export default function App() {
               </div>
 
               {/* Content */}
-              {incubateeViewMode === 'cards' ? (
+              {incubateeViewMode === 'Startup' ? (
                 incubatees.length === 0 ? (
                   <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
                     <Lightbulb className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -2316,7 +2316,19 @@ export default function App() {
                   />
                 )
               ) : (
-                <FoundersTable incubatees={incubatees} unassignedFounders={unassignedFounders} />
+                <FoundersTable
+                  incubatees={incubatees}
+                  unassignedFounders={unassignedFounders}
+                  onViewFounder={(row) => {
+                    const inc = incubatees.find((i) =>
+                      i.founders.some((f) => f.id === row.founderId)
+                    );
+                    if (inc) {
+                      const founder = inc.founders.find((f) => f.id === row.founderId);
+                      if (founder) handleViewFounder(founder, inc);
+                    }
+                  }}
+                />
               )}
             </>
           ) : activeTab === 'preview' ? (

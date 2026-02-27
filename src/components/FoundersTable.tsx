@@ -1,3 +1,4 @@
+import React from 'react';
 import { Mail, Phone, Briefcase } from 'lucide-react';
 import { Incubatee, Founder } from './IncubateeTable';
 
@@ -16,9 +17,11 @@ interface FoundersTableProps {
   incubatees: Incubatee[];
   unassignedFounders?: Founder[];
   onViewFounder?: (founder: FounderRow) => void;
+  selectedFounders?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
-export function FoundersTable({ incubatees, unassignedFounders = [], onViewFounder }: FoundersTableProps) {
+export function FoundersTable({ incubatees, unassignedFounders = [], onViewFounder, selectedFounders = [], onSelectionChange }: FoundersTableProps) {
   const getStatusColor = (status: Incubatee['status']) => {
     switch (status) {
       case 'Graduate':
@@ -60,12 +63,40 @@ export function FoundersTable({ incubatees, unassignedFounders = [], onViewFound
     })),
   ];
 
+  const allIds = founderRows.map((r) => r.founderId);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selectedFounders.includes(id));
+  const someSelected = allIds.some((id) => selectedFounders.includes(id)) && !allSelected;
+
+  const toggleAll = () => {
+    if (!onSelectionChange) return;
+    onSelectionChange(allSelected ? [] : allIds);
+  };
+
+  const toggleOne = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onSelectionChange) return;
+    onSelectionChange(
+      selectedFounders.includes(id)
+        ? selectedFounders.filter((s) => s !== id)
+        : [...selectedFounders, id]
+    );
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
+              <th className="px-4 py-4 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                  onChange={toggleAll}
+                  className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] cursor-pointer"
+                />
+              </th>
               <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Founder Name
               </th>
@@ -87,12 +118,22 @@ export function FoundersTable({ incubatees, unassignedFounders = [], onViewFound
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {founderRows.map((row) => (
+            {founderRows.map((row) => {
+              const isSelected = selectedFounders.includes(row.founderId);
+              return (
               <tr
                 key={row.founderId}
-                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                className={`hover:bg-gray-50 transition-colors cursor-pointer ${isSelected ? 'bg-red-50' : ''}`}
                 onClick={() => onViewFounder?.(row)}
               >
+                <td className="px-4 py-4" onClick={(e) => toggleOne(row.founderId, e)}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {}}
+                    className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] cursor-pointer"
+                  />
+                </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
@@ -141,10 +182,11 @@ export function FoundersTable({ incubatees, unassignedFounders = [], onViewFound
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {founderRows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                   No founders found. Add founders to your incubatees.
                 </td>
               </tr>

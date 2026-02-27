@@ -50,11 +50,13 @@ import {
   deleteIncubateePermanently as deleteIncubateePermanentlyInDb,
   fetchCohortLevels as fetchCohortLevelsFromDb,
   addCohortLevel as addCohortLevelToDb,
+  fetchStatusOptions as fetchStatusOptionsFromDb,
+  addStatusOption as addStatusOptionToDb,
   deleteFounders as deleteFoundersFromSupabase,
   unassignFounders as unassignFoundersInDb,
   linkFounderToIncubatee as linkFounderToIncubateeInDb,
 } from './lib/incubateeService';
-import type { CohortLevelOption } from './lib/incubateeService';
+import type { CohortLevelOption, StatusOption } from './lib/incubateeService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -506,6 +508,7 @@ export default function App() {
   const [incubatees, setIncubatees] = useState<Incubatee[]>([]);
   const [unassignedFounders, setUnassignedFounders] = useState<Founder[]>([]);
   const [cohortLevelOptions, setCohortLevelOptions] = useState<CohortLevelOption[]>([]);
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
   const [selectedIncubatees, setSelectedIncubatees] = useState<string[]>([]);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [showIncubateeForm, setShowIncubateeForm] = useState(false);
@@ -1276,7 +1279,7 @@ export default function App() {
       try {
         console.log('🔄 Starting to fetch data from Supabase...');
         
-        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams, loadedIncubatees, loadedUnassignedFounders, loadedArchivedIncubatees, loadedCohortLevels] = await Promise.all([
+        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams, loadedIncubatees, loadedUnassignedFounders, loadedArchivedIncubatees, loadedCohortLevels, loadedStatusOptions] = await Promise.all([
           fetchContactsFromSupabase(),
           fetchEventsFromSupabase(),
           fetchArchivedContactsFromSupabase(),
@@ -1286,6 +1289,7 @@ export default function App() {
           fetchUnassignedFoundersFromSupabase(),
           fetchArchivedIncubateesFromSupabase(),
           fetchCohortLevelsFromDb(),
+          fetchStatusOptionsFromDb(),
         ]);
 
         console.log('✅ Data fetched successfully!');
@@ -1330,6 +1334,9 @@ export default function App() {
 
         setCohortLevelOptions(loadedCohortLevels);
         console.log('✅ Cohort level options loaded:', loadedCohortLevels.length);
+
+        setStatusOptions(loadedStatusOptions);
+        console.log('✅ Status options loaded:', loadedStatusOptions.length);
       } catch (error) {
         console.error('❌ Supabase: failed to load data', error);
         console.error('Error details:', {
@@ -2684,6 +2691,14 @@ export default function App() {
             const saved = await addCohortLevelToDb(level);
             setCohortLevelOptions((prev) =>
               [...prev.filter((o) => o.level !== saved.level), saved].sort((a, b) => a.level - b.level)
+            );
+            return saved;
+          }}
+          statusOptions={statusOptions}
+          onAddStatus={async (name: string) => {
+            const saved = await addStatusOptionToDb(name);
+            setStatusOptions((prev) =>
+              [...prev.filter((o) => o.name !== saved.name), saved]
             );
             return saved;
           }}

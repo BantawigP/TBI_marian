@@ -372,14 +372,14 @@ export async function deleteIncubateePermanently(id: string): Promise<void> {
   const numericId = parseInt(id, 10);
   if (!Number.isFinite(numericId)) return;
 
-  // Delete founders first (foreign key)
+  // Detach founders (set incubatee_id to null) so they survive as unassigned
   const { error: founderErr } = await supabase
     .from('founders')
-    .delete()
+    .update({ incubatee_id: null })
     .eq('incubatee_id', numericId);
 
   if (founderErr) {
-    console.error('❌ Error deleting founders for incubatee:', founderErr);
+    console.error('❌ Error detaching founders from incubatee:', founderErr);
     throw founderErr;
   }
 
@@ -393,7 +393,7 @@ export async function deleteIncubateePermanently(id: string): Promise<void> {
     throw error;
   }
 
-  console.log(`🗑️ Permanently deleted incubatee ${numericId}`);
+  console.log(`🗑️ Permanently deleted incubatee ${numericId}, founders preserved`);
 }
 
 // ─── ADD FOUNDER to existing Incubatee ─────────────────────────

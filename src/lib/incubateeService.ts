@@ -9,7 +9,8 @@ interface FounderRow {
   name: string;
   email: string;
   phone: string;
-  role: string;
+  role: string;       // legacy column kept for backward compat
+  roles?: string[];   // new array column
 }
 
 interface IncubateeRow {
@@ -27,12 +28,19 @@ interface IncubateeRow {
 // ─── Row → Model mappers ──────────────────────────────────────
 
 function mapFounderRow(row: FounderRow): Founder {
+  // Prefer the new roles[] column; fall back to wrapping the legacy role string
+  const roles: string[] =
+    Array.isArray(row.roles) && row.roles.length > 0
+      ? row.roles
+      : row.role
+      ? [row.role]
+      : [];
   return {
     id: row.id.toString(),
     name: row.name,
     email: row.email,
     phone: row.phone,
-    role: row.role,
+    roles,
   };
 }
 
@@ -248,7 +256,8 @@ async function syncFounders(incubateeId: number, founders: Founder[]): Promise<v
       name: f.name,
       email: f.email,
       phone: f.phone,
-      role: f.role,
+      role: (f.roles ?? [])[0] ?? '',  // legacy column
+      roles: f.roles ?? [],
     }));
 
     const { error } = await supabase.from('founders').insert(rows);
@@ -264,7 +273,8 @@ async function syncFounders(incubateeId: number, founders: Founder[]): Promise<v
         name: founder.name,
         email: founder.email,
         phone: founder.phone,
-        role: founder.role,
+        role: (founder.roles ?? [])[0] ?? '',
+        roles: founder.roles ?? [],
       })
       .eq('id', parseInt(founder.id, 10));
 
@@ -284,7 +294,8 @@ async function syncFounders(incubateeId: number, founders: Founder[]): Promise<v
         name: founder.name,
         email: founder.email,
         phone: founder.phone,
-        role: founder.role,
+        role: (founder.roles ?? [])[0] ?? '',
+        roles: founder.roles ?? [],
       })
       .eq('id', parseInt(founder.id, 10));
 
@@ -418,7 +429,8 @@ export async function addFounderToIncubatee(
       name: founder.name,
       email: founder.email,
       phone: founder.phone,
-      role: founder.role,
+      role: (founder.roles ?? [])[0] ?? '',
+      roles: founder.roles ?? [],
     })
     .select('*')
     .single();
@@ -446,7 +458,8 @@ export async function updateFounder(founder: Founder): Promise<Founder> {
       name: founder.name,
       email: founder.email,
       phone: founder.phone,
-      role: founder.role,
+      role: (founder.roles ?? [])[0] ?? '',
+      roles: founder.roles ?? [],
     })
     .eq('id', numericId)
     .select('*')
@@ -481,6 +494,51 @@ export async function deleteFounders(ids: string[]): Promise<void> {
   }
 
   console.log(`🗑️ Deleted ${numericIds.length} founder(s)`);
+}
+
+/**
+ * Find a founder by name and email — used for duplicate detection before adding.
+ */
+export async function findFounderByNameAndEmail(
+  name: string,
+  email: string
+): Promise<Founder | null> {
+  const { data, error } = await supabase
+    .from('founders')
+    .select('*')
+    .ilike('name', name.trim())
+    .ilike('email', email.trim())
+    .maybeSingle();
+
+  if (error) {
+    console.error('❌ Error finding founder by name/email:', error);
+    return null;
+  }
+
+  return data ? mapFounderRow(data as FounderRow) : null;
+}
+
+/**
+ * Link an existing founder to an incubatee by updating incubatee_id.
+ */
+export async function linkFounderToIncubatee(
+  founderId: string,
+  incubateeId: string
+): Promise<void> {
+  const numericFounderId = parseInt(founderId, 10);
+  const numericIncubateeId = incubateeId ? parseInt(incubateeId, 10) : null;
+
+  const { error } = await supabase
+    .from('founders')
+    .update({ incubatee_id: numericIncubateeId })
+    .eq('id', numericFounderId);
+
+  if (error) {
+    console.error('❌ Error linking founder to incubatee:', error);
+    throw error;
+  }
+
+  console.log(`🔗 Linked founder ${founderId} to incubatee ${incubateeId}`);
 }
 
 /**

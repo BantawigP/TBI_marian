@@ -8,7 +8,7 @@ interface FounderRow {
   phone: string;
   role: string;
   startupName: string;
-  cohortLevel: number;
+  cohortLevel: number[];
   status: Incubatee['status'] | '—';
 }
 
@@ -55,7 +55,7 @@ export function FoundersTable({ incubatees, unassignedFounders = [], onViewFound
       phone: founder.phone,
       role: founder.role,
       startupName: '—',
-      cohortLevel: 0,
+      cohortLevel: [],
       status: '—' as const,
     })),
   ];
@@ -122,8 +122,8 @@ export function FoundersTable({ incubatees, unassignedFounders = [], onViewFound
                 <td className="px-6 py-4">
                   <div>
                     <div className="font-medium text-gray-900 text-sm">{row.startupName}</div>
-                    {row.cohortLevel > 0 && (
-                      <div className="text-xs text-gray-500">Cohort {row.cohortLevel}</div>
+                    {row.cohortLevel.length > 0 && (
+                      <div className="text-xs text-gray-500">{row.cohortLevel.map((l) => `Cohort ${l}`).join(', ')}</div>
                     )}
                   </div>
                 </td>

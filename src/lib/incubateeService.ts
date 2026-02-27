@@ -15,8 +15,10 @@ interface FounderRow {
 interface IncubateeRow {
   id: number;
   startup_name: string;
-  cohort_level: number;
+  cohort_level: number[] | number;
   startup_description: string;
+  google_drive_link?: string;
+  notes?: string;
   status: string;
   is_active: boolean;
   founders?: FounderRow[];
@@ -38,8 +40,10 @@ function mapIncubateeRow(row: IncubateeRow): Incubatee {
   return {
     id: row.id.toString(),
     startupName: row.startup_name,
-    cohortLevel: row.cohort_level as 1 | 2 | 3 | 4,
+    cohortLevel: Array.isArray(row.cohort_level) ? row.cohort_level : [row.cohort_level],
     startupDescription: row.startup_description,
+    googleDriveLink: row.google_drive_link || '',
+    notes: row.notes || '',
     status: row.status as Incubatee['status'],
     founders: (row.founders || []).map(mapFounderRow),
   };
@@ -98,43 +102,64 @@ export async function fetchUnassignedFounders(): Promise<Founder[]> {
 export async function saveIncubatee(incubatee: Incubatee): Promise<Incubatee> {
   const isNew = !incubatee.id || incubatee.id.startsWith('inc_');
 
-  // 1. Upsert the incubatee row
+  // 1. Build the incubatee payload
   const incubateePayload: Record<string, unknown> = {
     startup_name: incubatee.startupName,
     cohort_level: incubatee.cohortLevel,
     startup_description: incubatee.startupDescription,
+    google_drive_link: incubatee.googleDriveLink || null,
+    notes: incubatee.notes || null,
     status: incubatee.status,
     is_active: true,
   };
 
   let savedIncubateeId: number;
 
-  if (isNew) {
-    const { data, error } = await supabase
-      .from('incubatees')
-      .insert(incubateePayload)
-      .select('id')
-      .single();
+  // Helper: attempt insert or update, retrying without unsupported columns if needed
+  const attemptSave = async (payload: Record<string, unknown>): Promise<number> => {
+    if (isNew) {
+      const { data, error } = await supabase
+        .from('incubatees')
+        .insert(payload)
+        .select('id')
+        .single();
 
-    if (error) {
-      console.error('❌ Error creating incubatee:', error);
-      throw error;
-    }
-    savedIncubateeId = data.id;
-    console.log('✅ Created incubatee:', savedIncubateeId);
-  } else {
-    savedIncubateeId = parseInt(incubatee.id, 10);
-    const { error } = await supabase
-      .from('incubatees')
-      .update(incubateePayload)
-      .eq('id', savedIncubateeId);
+      if (error) throw error;
+      return data.id;
+    } else {
+      const id = parseInt(incubatee.id, 10);
+      const { error } = await supabase
+        .from('incubatees')
+        .update(payload)
+        .eq('id', id);
 
-    if (error) {
-      console.error('❌ Error updating incubatee:', error);
-      throw error;
+      if (error) throw error;
+      return id;
     }
-    console.log('✅ Updated incubatee:', savedIncubateeId);
+  };
+
+  try {
+    savedIncubateeId = await attemptSave(incubateePayload);
+  } catch (err: unknown) {
+    // If the error is about an unknown column (notes or google_drive_link), retry without those columns
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('notes') || msg.includes('google_drive_link')) {
+      console.warn('⚠️ Column missing in DB, retrying without optional columns:', msg);
+      const fallbackPayload = { ...incubateePayload };
+      delete fallbackPayload.notes;
+      delete fallbackPayload.google_drive_link;
+      try {
+        savedIncubateeId = await attemptSave(fallbackPayload);
+      } catch (retryErr) {
+        console.error('❌ Error saving incubatee (retry):', retryErr);
+        throw retryErr;
+      }
+    } else {
+      console.error('❌ Error saving incubatee:', err);
+      throw err;
+    }
   }
+  console.log(isNew ? '✅ Created incubatee:' : '✅ Updated incubatee:', savedIncubateeId);
 
   // 2. Sync founders
   await syncFounders(savedIncubateeId, incubatee.founders);
@@ -293,6 +318,84 @@ export async function deleteIncubatees(ids: string[]): Promise<void> {
   console.log(`🗑️ Soft-deleted ${numericIds.length} incubatee(s)`);
 }
 
+// ─── FETCH ARCHIVED ────────────────────────────────────────────
+
+/**
+ * Fetch all archived (soft-deleted) incubatees with their founders.
+ */
+export async function fetchArchivedIncubatees(): Promise<Incubatee[]> {
+  console.log('🔍 Fetching archived incubatees...');
+
+  const { data, error } = await supabase
+    .from('incubatees')
+    .select('*, founders(*)')
+    .eq('is_active', false)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ Error fetching archived incubatees:', error);
+    throw error;
+  }
+
+  console.log('✅ Fetched archived incubatees:', data?.length || 0);
+  return (data || []).map(mapIncubateeRow);
+}
+
+// ─── RESTORE ───────────────────────────────────────────────────
+
+/**
+ * Restore soft-deleted incubatees by setting is_active = true.
+ */
+export async function restoreIncubatees(ids: string[]): Promise<void> {
+  const numericIds = ids.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+  if (numericIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('incubatees')
+    .update({ is_active: true })
+    .in('id', numericIds);
+
+  if (error) {
+    console.error('❌ Error restoring incubatees:', error);
+    throw error;
+  }
+
+  console.log(`✅ Restored ${numericIds.length} incubatee(s)`);
+}
+
+// ─── PERMANENT DELETE ──────────────────────────────────────────
+
+/**
+ * Permanently delete an incubatee and its founders from the database.
+ */
+export async function deleteIncubateePermanently(id: string): Promise<void> {
+  const numericId = parseInt(id, 10);
+  if (!Number.isFinite(numericId)) return;
+
+  // Delete founders first (foreign key)
+  const { error: founderErr } = await supabase
+    .from('founders')
+    .delete()
+    .eq('incubatee_id', numericId);
+
+  if (founderErr) {
+    console.error('❌ Error deleting founders for incubatee:', founderErr);
+    throw founderErr;
+  }
+
+  const { error } = await supabase
+    .from('incubatees')
+    .delete()
+    .eq('id', numericId);
+
+  if (error) {
+    console.error('❌ Error permanently deleting incubatee:', error);
+    throw error;
+  }
+
+  console.log(`🗑️ Permanently deleted incubatee ${numericId}`);
+}
+
 // ─── ADD FOUNDER to existing Incubatee ─────────────────────────
 
 /**
@@ -356,4 +459,61 @@ export async function updateFounder(founder: Founder): Promise<Founder> {
 
   console.log('✅ Updated founder:', data.id);
   return mapFounderRow(data);
+}
+
+// ─── COHORT LEVELS ─────────────────────────────────────────────
+
+export interface CohortLevelOption {
+  id: number;
+  level: number;
+}
+
+/**
+ * Fetch all cohort levels from the cohort_levels table.
+ * Falls back to default [1,2,3,4] if the table doesn't exist or is empty.
+ */
+export async function fetchCohortLevels(): Promise<CohortLevelOption[]> {
+  try {
+    const { data, error } = await supabase
+      .from('cohort_levels')
+      .select('id, level')
+      .order('level', { ascending: true });
+
+    if (error) {
+      console.warn('⚠️ Could not fetch cohort_levels, using defaults:', error.message);
+      return [1, 2, 3, 4].map((l, i) => ({ id: i + 1, level: l }));
+    }
+
+    if (!data || data.length === 0) {
+      return [1, 2, 3, 4].map((l, i) => ({ id: i + 1, level: l }));
+    }
+
+    return data as CohortLevelOption[];
+  } catch {
+    return [1, 2, 3, 4].map((l, i) => ({ id: i + 1, level: l }));
+  }
+}
+
+/**
+ * Add a new cohort level to the database. Returns the saved option.
+ */
+export async function addCohortLevel(level: number): Promise<CohortLevelOption> {
+  try {
+    const { data, error } = await supabase
+      .from('cohort_levels')
+      .upsert({ level }, { onConflict: 'level' })
+      .select('id, level')
+      .single();
+
+    if (error) {
+      console.warn('⚠️ Could not save cohort level to DB:', error.message);
+      return { id: 0, level };
+    }
+
+    console.log('✅ Added cohort level:', data.level);
+    return data as CohortLevelOption;
+  } catch {
+    console.warn('⚠️ Could not save cohort level to DB');
+    return { id: 0, level };
+  }
 }

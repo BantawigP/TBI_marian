@@ -63,7 +63,7 @@ export function AddFounderModal({ incubatees, onClose, onSave }: AddFounderModal
                 <option value="">Choose a startup...</option>
                 {incubatees.map((incubatee) => (
                   <option key={incubatee.id} value={incubatee.id}>
-                    {incubatee.startupName} - Cohort {incubatee.cohortLevel}
+                    {incubatee.startupName} - {incubatee.cohortLevel.map((l) => `Cohort ${l}`).join(', ')}
                   </option>
                 ))}
               </select>

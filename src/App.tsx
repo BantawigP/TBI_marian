@@ -50,6 +50,8 @@ import {
   deleteIncubateePermanently as deleteIncubateePermanentlyInDb,
   fetchCohortLevels as fetchCohortLevelsFromDb,
   addCohortLevel as addCohortLevelToDb,
+  deleteFounders as deleteFoundersFromSupabase,
+  unassignFounders as unassignFoundersInDb,
 } from './lib/incubateeService';
 import type { CohortLevelOption } from './lib/incubateeService';
 
@@ -504,6 +506,7 @@ export default function App() {
   const [unassignedFounders, setUnassignedFounders] = useState<Founder[]>([]);
   const [cohortLevelOptions, setCohortLevelOptions] = useState<CohortLevelOption[]>([]);
   const [selectedIncubatees, setSelectedIncubatees] = useState<string[]>([]);
+  const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [showIncubateeForm, setShowIncubateeForm] = useState(false);
   const [editingIncubatee, setEditingIncubatee] = useState<Incubatee | null>(null);
   const [viewingIncubatee, setViewingIncubatee] = useState<Incubatee | null>(null);
@@ -511,6 +514,7 @@ export default function App() {
   const [showAddFounderModal, setShowAddFounderModal] = useState(false);
   const [incubateeViewMode, setIncubateeViewMode] = useState<'Startup' | 'founders'>('Startup');
   const [showDeleteIncubateeConfirm, setShowDeleteIncubateeConfirm] = useState(false);
+  const [showDeleteFounderConfirm, setShowDeleteFounderConfirm] = useState(false);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
   // Check if URL contains claim-access token
@@ -1544,6 +1548,42 @@ export default function App() {
     }
   };
 
+  const handleDeleteFounders = () => {
+    const idsToDelete = new Set(selectedFounders);
+
+    // Collect the founders being removed, annotated with their startup name
+    const toArchive: (Founder & { startupName: string })[] = [
+      ...incubatees.flatMap((inc) =>
+        inc.founders
+          .filter((f) => idsToDelete.has(f.id))
+          .map((f) => ({ ...f, startupName: inc.startupName }))
+      ),
+      ...unassignedFounders
+        .filter((f) => idsToDelete.has(f.id))
+        .map((f) => ({ ...f, startupName: '—' })),
+    ];
+
+    // Move to archived state
+    setArchivedFounders((prev) => [...prev, ...toArchive]);
+
+    // Remove from active state
+    setIncubatees((prev) =>
+      prev.map((inc) => ({
+        ...inc,
+        founders: inc.founders.filter((f) => !idsToDelete.has(f.id)),
+      }))
+    );
+    setUnassignedFounders((prev) => prev.filter((f) => !idsToDelete.has(f.id)));
+    setSelectedFounders([]);
+    setShowDeleteFounderConfirm(false);
+
+    // Detach founders from incubatees in DB (keeps them as unassigned, not permanently deleted)
+    unassignFoundersInDb([...idsToDelete]).catch((error) => {
+      console.error('❌ Failed to unassign founders in database:', error);
+      setSyncError('Founders archived locally but failed to sync with database.');
+    });
+  };
+
   const handleViewFounder = (founder: Founder, incubatee: Incubatee) => {
     setViewingFounder({ founder, incubatee });
   };
@@ -2278,10 +2318,15 @@ export default function App() {
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
               onPermanentDeleteTeamMember={handlePermanentDeleteTeamMember}
               onPermanentDeleteIncubatee={handlePermanentDeleteIncubatee}
-              onDeleteArchivedFounder={(founderId: string) => {
+              onDeleteArchivedFounder={async (founderId: string) => {
                 setArchivedFounders((prev) => prev.filter((f) => f.id !== founderId));
+                try {
+                  await deleteFoundersFromSupabase([founderId]);
+                } catch (error) {
+                  console.error('❌ Failed to permanently delete founder from database:', error);
+                }
               }}
-              onRemoveFounderFromIncubatee={(incubateeId: string, founderId: string) => {
+              onRemoveFounderFromIncubatee={async (incubateeId: string, founderId: string) => {
                 // Remove founder from the archived incubatee's founders array (startup remains)
                 setArchivedIncubatees((prev) =>
                   prev.map((inc) =>
@@ -2290,6 +2335,11 @@ export default function App() {
                       : inc
                   )
                 );
+                try {
+                  await deleteFoundersFromSupabase([founderId]);
+                } catch (error) {
+                  console.error('❌ Failed to permanently delete founder from database:', error);
+                }
               }}
               onRestoreFounder={(founder: Founder, incubateeId: string | null) => {
                 // Add founder back to unassigned founders list
@@ -2353,9 +2403,9 @@ export default function App() {
                       </button>
                       <button
                         onClick={() => {
-                          if (selectedIncubatees.length > 0) setShowDeleteIncubateeConfirm(true);
+                          if (selectedFounders.length > 0) setShowDeleteFounderConfirm(true);
                         }}
-                        disabled={selectedIncubatees.length === 0}
+                        disabled={selectedFounders.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -2428,6 +2478,8 @@ export default function App() {
                       if (founder) handleViewFounder(founder, inc);
                     }
                   }}
+                  selectedFounders={selectedFounders}
+                  onSelectionChange={setSelectedFounders}
                 />
               )}
             </>
@@ -2643,6 +2695,34 @@ export default function App() {
           onClose={() => setShowAddFounderModal(false)}
           onSave={handleAddFounderToIncubatee}
         />
+      )}
+
+      {/* Delete Founder Confirmation */}
+      {showDeleteFounderConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-900">Archive founders?</h3>
+            <p className="text-gray-600">
+              {selectedFounders.length} founder(s) will be moved to archives. You can restore them later.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteFounderConfirm(false)}
+                className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteFounders}
+                className="px-5 py-2.5 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
+              >
+                Archive
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete Incubatee Confirmation */}

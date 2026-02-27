@@ -381,7 +381,22 @@ export function FormPreview() {
       }));
       const { error: foundersError } = await supabase.from('founders').insert(founderRows);
       if (foundersError) throw foundersError;
-      toast.success('Startup registered successfully!', { description: 'The startup has been added to the incubatee database.' });
+
+      // Send confirmation emails to each founder with 1.5 s interval (non-blocking)
+      try {
+        await supabase.functions.invoke('send-incubation-confirmation', {
+          body: {
+            startupName: startupFormData.startupName.trim(),
+            founders: founders.map((f) => ({ name: f.name.trim(), email: f.email.toLowerCase().trim() })),
+          },
+        });
+      } catch (emailErr) {
+        console.warn('Confirmation email(s) could not be sent:', emailErr);
+      }
+
+      toast.success('Startup registered successfully!', {
+        description: 'The startup has been added to the incubatee database. Confirmation emails have been sent to each founder.',
+      });
       handleStartupReset();
     } catch (error: any) {
       console.error('Error submitting startup form:', error);

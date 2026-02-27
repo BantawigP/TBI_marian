@@ -11,8 +11,10 @@ export interface Founder {
 export interface Incubatee {
   id: string;
   startupName: string;
-  cohortLevel: 1 | 2 | 3 | 4;
+  cohortLevel: number[];
   startupDescription: string;
+  googleDriveLink?: string;
+  notes?: string;
   founders: Founder[];
   status: 'Graduate' | 'Incubatee' | 'Undergraduate' | 'Parked';
 }
@@ -121,7 +123,7 @@ export function IncubateeTable({
                 </td>
                 <td className="px-4 py-4">
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]">
-                    Cohort {incubatee.cohortLevel}
+                    {incubatee.cohortLevel.map((l) => `Cohort ${l}`).join(', ')}
                   </span>
                 </td>
                 <td className="px-4 py-4">

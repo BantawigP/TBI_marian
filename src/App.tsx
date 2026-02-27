@@ -45,7 +45,13 @@ import {
   deleteIncubatees as deleteIncubateesFromSupabase,
   addFounderToIncubatee as addFounderToIncubateeInDb,
   updateFounder as updateFounderInDb,
+  fetchArchivedIncubatees as fetchArchivedIncubateesFromSupabase,
+  restoreIncubatees as restoreIncubateesInDb,
+  deleteIncubateePermanently as deleteIncubateePermanentlyInDb,
+  fetchCohortLevels as fetchCohortLevelsFromDb,
+  addCohortLevel as addCohortLevelToDb,
 } from './lib/incubateeService';
+import type { CohortLevelOption } from './lib/incubateeService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
@@ -455,6 +461,7 @@ export default function App() {
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
   const [archivedTeamMembers, setArchivedTeamMembers] = useState<TeamMember[]>([]);
+  const [archivedIncubatees, setArchivedIncubatees] = useState<Incubatee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [graduatedFrom, setGraduatedFrom] = useState('');
   const [graduatedTo, setGraduatedTo] = useState('');
@@ -494,6 +501,7 @@ export default function App() {
   // Incubatee state
   const [incubatees, setIncubatees] = useState<Incubatee[]>([]);
   const [unassignedFounders, setUnassignedFounders] = useState<Founder[]>([]);
+  const [cohortLevelOptions, setCohortLevelOptions] = useState<CohortLevelOption[]>([]);
   const [selectedIncubatees, setSelectedIncubatees] = useState<string[]>([]);
   const [showIncubateeForm, setShowIncubateeForm] = useState(false);
   const [editingIncubatee, setEditingIncubatee] = useState<Incubatee | null>(null);
@@ -1262,7 +1270,7 @@ export default function App() {
       try {
         console.log('🔄 Starting to fetch data from Supabase...');
         
-        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams, loadedIncubatees, loadedUnassignedFounders] = await Promise.all([
+        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams, loadedIncubatees, loadedUnassignedFounders, loadedArchivedIncubatees, loadedCohortLevels] = await Promise.all([
           fetchContactsFromSupabase(),
           fetchEventsFromSupabase(),
           fetchArchivedContactsFromSupabase(),
@@ -1270,6 +1278,8 @@ export default function App() {
           fetchArchivedTeamMembersFromSupabase(),
           fetchIncubateesFromSupabase(),
           fetchUnassignedFoundersFromSupabase(),
+          fetchArchivedIncubateesFromSupabase(),
+          fetchCohortLevelsFromDb(),
         ]);
 
         console.log('✅ Data fetched successfully!');
@@ -1280,6 +1290,7 @@ export default function App() {
         console.log('  - Archived Team Members:', loadedArchivedTeams.length);
         console.log('  - Incubatees:', loadedIncubatees.length);
         console.log('  - Unassigned Founders:', loadedUnassignedFounders.length);
+        console.log('  - Archived Incubatees:', loadedArchivedIncubatees.length);
 
         if (!isMounted) return;
 
@@ -1307,6 +1318,12 @@ export default function App() {
 
         setUnassignedFounders(loadedUnassignedFounders);
         console.log('✅ Unassigned founders state updated');
+
+        setArchivedIncubatees(loadedArchivedIncubatees);
+        console.log('✅ Archived incubatees state updated');
+
+        setCohortLevelOptions(loadedCohortLevels);
+        console.log('✅ Cohort level options loaded:', loadedCohortLevels.length);
       } catch (error) {
         console.error('❌ Supabase: failed to load data', error);
         console.error('Error details:', {
@@ -1506,8 +1523,10 @@ export default function App() {
 
   const handleDeleteIncubatees = async () => {
     const idsToDelete = [...selectedIncubatees];
-    // Optimistic local removal
+    // Move to archived state
+    const deletedItems = incubatees.filter((i) => idsToDelete.includes(i.id));
     setIncubatees((prev) => prev.filter((i) => !idsToDelete.includes(i.id)));
+    setArchivedIncubatees((prev) => [...prev, ...deletedItems]);
     setSelectedIncubatees([]);
     setShowDeleteIncubateeConfirm(false);
 
@@ -2028,6 +2047,40 @@ export default function App() {
     setTeamRefreshToken((token) => token + 1);
   };
 
+  // ─── Incubatee Archive Handlers ──────────────────────────────
+
+  const handleRestoreIncubatee = async (incubatee: Incubatee) => {
+    setArchivedIncubatees((prev) => prev.filter((i) => i.id !== incubatee.id));
+    setIncubatees((prev) => [...prev, incubatee]);
+
+    setIsSyncing(true);
+    try {
+      await restoreIncubateesInDb([incubatee.id]);
+      console.log('✅ Incubatee restored in database');
+    } catch (error) {
+      console.error('❌ Failed to restore incubatee:', error);
+      setSyncError('Incubatee restored locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePermanentDeleteIncubatee = async (id: string) => {
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      await deleteIncubateePermanentlyInDb(id);
+      setArchivedIncubatees((prev) => prev.filter((i) => i.id !== id));
+      console.log('✅ Incubatee permanently deleted');
+    } catch (error) {
+      console.error('❌ Failed to permanently delete incubatee:', error);
+      setSyncError('Failed to permanently delete incubatee from database.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleSendEmailCampaign = () => {
     setActiveTab('events');
   };
@@ -2199,12 +2252,15 @@ export default function App() {
               archivedContacts={archivedContacts}
               archivedEvents={archivedEvents}
               archivedTeamMembers={archivedTeamMembers}
+              archivedIncubatees={archivedIncubatees}
               onRestoreContact={handleRestoreContact}
               onRestoreEvent={handleRestoreEvent}
               onRestoreTeamMember={handleRestoreTeamMember}
+              onRestoreIncubatee={handleRestoreIncubatee}
               onPermanentDeleteContact={handlePermanentDeleteContact}
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
               onPermanentDeleteTeamMember={handlePermanentDeleteTeamMember}
+              onPermanentDeleteIncubatee={handlePermanentDeleteIncubatee}
             />
           ) : activeTab === 'team' ? (
             <Team
@@ -2501,6 +2557,14 @@ export default function App() {
         <IncubateeForm
           incubatee={editingIncubatee}
           allFounders={allFounders}
+          cohortLevelOptions={cohortLevelOptions}
+          onAddCohortLevel={async (level: number) => {
+            const saved = await addCohortLevelToDb(level);
+            setCohortLevelOptions((prev) =>
+              [...prev.filter((o) => o.level !== saved.level), saved].sort((a, b) => a.level - b.level)
+            );
+            return saved;
+          }}
           onSave={handleSaveIncubatee}
           onClose={() => {
             setShowIncubateeForm(false);

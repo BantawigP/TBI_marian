@@ -95,7 +95,7 @@ export function ViewFounder({ founder, incubatee, onClose, onSave }: ViewFounder
                     <Users className="w-5 h-5 text-[#FF2B5E] mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <p className="text-xs text-gray-500 mb-1">Cohort Level</p>
-                      <p className="text-sm text-gray-900">Cohort {incubatee.cohortLevel}</p>
+                      <p className="text-sm text-gray-900">{incubatee.cohortLevel.map((l: number) => `Cohort ${l}`).join(', ')}</p>
                     </div>
                   </div>
 

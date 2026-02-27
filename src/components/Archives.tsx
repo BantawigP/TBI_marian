@@ -1,32 +1,39 @@
-import { Users, Calendar, RotateCcw, Trash2, AlertCircle } from 'lucide-react';
+import { Users, Calendar, RotateCcw, Trash2, AlertCircle, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
 import type { Contact, Event, TeamMember } from '../types';
+import type { Incubatee } from './IncubateeTable';
 import { PopupDialog } from './PopupDialog';
 
 interface ArchivesProps {
   archivedContacts: Contact[];
   archivedEvents: Event[];
   archivedTeamMembers: TeamMember[];
+  archivedIncubatees: Incubatee[];
   onRestoreContact: (contact: Contact) => void;
   onRestoreEvent: (event: Event) => void;
   onPermanentDeleteContact: (contactId: string) => void;
   onPermanentDeleteEvent: (eventId: string) => void | Promise<void>;
   onRestoreTeamMember: (member: TeamMember) => void | Promise<void>;
   onPermanentDeleteTeamMember: (memberId: string) => void | Promise<void>;
+  onRestoreIncubatee: (incubatee: Incubatee) => void | Promise<void>;
+  onPermanentDeleteIncubatee: (id: string) => void | Promise<void>;
 }
 
 export function Archives({
   archivedContacts,
   archivedEvents,
   archivedTeamMembers,
+  archivedIncubatees,
   onRestoreContact,
   onRestoreEvent,
   onPermanentDeleteContact,
   onPermanentDeleteEvent,
   onRestoreTeamMember,
   onPermanentDeleteTeamMember,
+  onRestoreIncubatee,
+  onPermanentDeleteIncubatee,
 }: ArchivesProps) {
-  const [activeTab, setActiveTab] = useState<'contacts' | 'events' | 'team'>('contacts');
+  const [activeTab, setActiveTab] = useState<'contacts' | 'events' | 'team' | 'incubatees'>('contacts');
   const [dialog, setDialog] = useState<{
     title: string;
     message: string;
@@ -132,6 +139,34 @@ export function Archives({
     }
   };
 
+  const handleRestoreIncubatee = async (incubatee: Incubatee) => {
+    const confirmed = await openConfirm({
+      title: 'Restore incubatee',
+      message: `Restore "${incubatee.startupName}" and its founders?`,
+      tone: 'primary',
+    });
+    if (confirmed) {
+      onRestoreIncubatee(incubatee);
+    }
+  };
+
+  const handlePermanentDeleteIncubatee = async (id: string, name: string) => {
+    const confirmed = await openConfirm({
+      title: 'Permanently delete incubatee',
+      message: `Permanently delete "${name}" and all its founders? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onPermanentDeleteIncubatee(id);
+    }
+  };
+
+  // Gather all founders from archived incubatees for the Founders section
+  const archivedFounders = archivedIncubatees.flatMap((inc) =>
+    inc.founders.map((f) => ({ ...f, startupName: inc.startupName, incubateeId: inc.id }))
+  );
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -156,7 +191,7 @@ export function Archives({
       </div>
 
       {/* Summary Cards (Clickable) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <button
           type="button"
           onClick={() => setActiveTab('contacts')}
@@ -218,6 +253,27 @@ export function Archives({
             </h3>
           </div>
           <p className="text-sm text-gray-600">Archived Users</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('incubatees')}
+          className={`text-left rounded-xl p-6 border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF2B5E] ${
+            activeTab === 'incubatees'
+              ? 'bg-white border-[#FF2B5E]/40 shadow-sm'
+              : 'bg-white border-gray-200 hover:border-gray-300'
+          }`}
+          aria-pressed={activeTab === 'incubatees'}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+              <Lightbulb className="w-5 h-5 text-orange-600" />
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-900">
+              {archivedIncubatees.length}
+            </h3>
+          </div>
+          <p className="text-sm text-gray-600">Archived Incubatees</p>
         </button>
       </div>
 
@@ -382,7 +438,7 @@ export function Archives({
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === 'team' ? (
         <div>
           {archivedTeamMembers.length > 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -471,7 +527,186 @@ export function Archives({
             </div>
           )}
         </div>
-      )}
+      ) : activeTab === 'incubatees' ? (
+        <div className="space-y-8">
+          {/* Startups Section */}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5 text-[#FF2B5E]" />
+              Startups ({archivedIncubatees.length})
+            </h2>
+            {archivedIncubatees.length > 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Startup Name
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Cohort
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Status
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Founders
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {archivedIncubatees.map((inc, index) => (
+                        <tr
+                          key={inc.id}
+                          className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                            index === archivedIncubatees.length - 1 ? 'border-b-0' : ''
+                          }`}
+                        >
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-[#FF2B5E]/10 flex items-center justify-center">
+                                <Lightbulb className="w-4 h-4 text-[#FF2B5E]" />
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-900">
+                                  {inc.startupName}
+                                </span>
+                                <p className="text-xs text-gray-500 truncate max-w-xs">
+                                  {inc.startupDescription}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]">
+                              {inc.cohortLevel.map((l) => `Cohort ${l}`).join(', ')}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              inc.status === 'Graduate' ? 'bg-green-100 text-green-700' :
+                              inc.status === 'Incubatee' ? 'bg-blue-100 text-blue-700' :
+                              inc.status === 'Undergraduate' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {inc.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-sm text-gray-600">
+                            {inc.founders.length} founder{inc.founders.length !== 1 ? 's' : ''}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleRestoreIncubatee(inc)}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Restore incubatee"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handlePermanentDeleteIncubatee(inc.id, inc.startupName)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Permanently delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                <Lightbulb className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No Archived Startups
+                </h3>
+                <p className="text-gray-600">
+                  Deleted startups will appear here.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Founders Section */}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#FF2B5E]" />
+              Founders ({archivedFounders.length})
+            </h2>
+            {archivedFounders.length > 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Name
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Email
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Phone
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Role
+                        </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Startup
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {archivedFounders.map((founder, index) => (
+                        <tr
+                          key={`${founder.incubateeId}-${founder.id}`}
+                          className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                            index === archivedFounders.length - 1 ? 'border-b-0' : ''
+                          }`}
+                        >
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
+                                {founder.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-medium text-gray-900">
+                                {founder.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4 text-gray-600 text-sm">{founder.email}</td>
+                          <td className="p-4 text-gray-600 text-sm">{founder.phone}</td>
+                          <td className="p-4 text-gray-600 text-sm">{founder.role}</td>
+                          <td className="p-4 text-gray-600 text-sm">{founder.startupName}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No Archived Founders
+                </h3>
+                <p className="text-gray-600">
+                  Founders from deleted startups will appear here.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
       <PopupDialog
         open={!!dialog}
         title={dialog?.title ?? ''}

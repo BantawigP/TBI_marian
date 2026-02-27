@@ -95,7 +95,7 @@ export function IncubateeCards({ incubatees, selectedIncubatees, setSelectedIncu
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]">
                       <Award className="w-3 h-3 mr-1" />
-                      Cohort {incubatee.cohortLevel}
+                      {incubatee.cohortLevel.map((l) => `Cohort ${l}`).join(', ')}
                     </span>
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(

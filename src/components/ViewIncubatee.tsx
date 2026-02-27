@@ -1,4 +1,4 @@
-import { X, Lightbulb, Users, FileText, Award, Mail, Phone } from 'lucide-react';
+import { X, Lightbulb, Users, FileText, Award, Mail, Phone, Link, StickyNote } from 'lucide-react';
 import { Incubatee } from './IncubateeTable';
 
 interface ViewIncubateeProps {
@@ -65,7 +65,7 @@ export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps
                 <div>
                   <p className="text-sm text-gray-600">Cohort Level</p>
                   <p className="font-semibold text-gray-900">
-                    Cohort {incubatee.cohortLevel}
+                    {incubatee.cohortLevel.map((l) => `Cohort ${l}`).join(', ')}
                   </p>
                 </div>
               </div>
@@ -85,6 +85,43 @@ export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps
                 </p>
               </div>
             </div>
+
+            {/* Google Drive Link */}
+            {incubatee.googleDriveLink && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Link className="w-5 h-5 text-[#FF2B5E]" />
+                  <h3 className="font-semibold text-gray-900">
+                    Google Drive Link
+                  </h3>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <a
+                    href={incubatee.googleDriveLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#FF2B5E] hover:underline break-all"
+                  >
+                    {incubatee.googleDriveLink}
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {incubatee.notes && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <StickyNote className="w-5 h-5 text-[#FF2B5E]" />
+                  <h3 className="font-semibold text-gray-900">
+                    Notes
+                  </h3>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <p className="text-gray-700 whitespace-pre-wrap">{incubatee.notes}</p>
+                </div>
+              </div>
+            )}
 
             {/* Founders */}
             <div>

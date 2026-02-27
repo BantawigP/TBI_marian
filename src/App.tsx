@@ -462,6 +462,7 @@ export default function App() {
   const [archivedEvents, setArchivedEvents] = useState<Event[]>([]);
   const [archivedTeamMembers, setArchivedTeamMembers] = useState<TeamMember[]>([]);
   const [archivedIncubatees, setArchivedIncubatees] = useState<Incubatee[]>([]);
+  const [archivedFounders, setArchivedFounders] = useState<(Founder & { startupName: string })[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [graduatedFrom, setGraduatedFrom] = useState('');
   const [graduatedTo, setGraduatedTo] = useState('');
@@ -2069,13 +2070,28 @@ export default function App() {
     setIsSyncing(true);
     setSyncError(null);
 
+    // Preserve founders from the deleted startup
+    const deletedIncubatee = archivedIncubatees.find((i) => i.id === id);
+    if (deletedIncubatee && deletedIncubatee.founders.length > 0) {
+      const orphanedFounders = deletedIncubatee.founders.map((f) => ({
+        ...f,
+        startupName: deletedIncubatee.startupName,
+      }));
+      setArchivedFounders((prev) => [...prev, ...orphanedFounders]);
+    }
+
     try {
       await deleteIncubateePermanentlyInDb(id);
       setArchivedIncubatees((prev) => prev.filter((i) => i.id !== id));
-      console.log('✅ Incubatee permanently deleted');
+      console.log('✅ Incubatee permanently deleted, founders preserved');
     } catch (error) {
       console.error('❌ Failed to permanently delete incubatee:', error);
       setSyncError('Failed to permanently delete incubatee from database.');
+      // Rollback: remove the orphaned founders we just added
+      if (deletedIncubatee) {
+        const founderIds = new Set(deletedIncubatee.founders.map((f) => f.id));
+        setArchivedFounders((prev) => prev.filter((f) => !founderIds.has(f.id)));
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -2253,6 +2269,7 @@ export default function App() {
               archivedEvents={archivedEvents}
               archivedTeamMembers={archivedTeamMembers}
               archivedIncubatees={archivedIncubatees}
+              archivedFounders={archivedFounders}
               onRestoreContact={handleRestoreContact}
               onRestoreEvent={handleRestoreEvent}
               onRestoreTeamMember={handleRestoreTeamMember}
@@ -2261,6 +2278,33 @@ export default function App() {
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
               onPermanentDeleteTeamMember={handlePermanentDeleteTeamMember}
               onPermanentDeleteIncubatee={handlePermanentDeleteIncubatee}
+              onDeleteArchivedFounder={(founderId: string) => {
+                setArchivedFounders((prev) => prev.filter((f) => f.id !== founderId));
+              }}
+              onRemoveFounderFromIncubatee={(incubateeId: string, founderId: string) => {
+                // Remove founder from the archived incubatee's founders array (startup remains)
+                setArchivedIncubatees((prev) =>
+                  prev.map((inc) =>
+                    inc.id === incubateeId
+                      ? { ...inc, founders: inc.founders.filter((f) => f.id !== founderId) }
+                      : inc
+                  )
+                );
+              }}
+              onRestoreFounder={(founder: Founder, incubateeId: string | null) => {
+                // Add founder back to unassigned founders list
+                setUnassignedFounders((prev) => [...prev, founder]);
+                // If founder was part of an archived incubatee, remove from that incubatee
+                if (incubateeId) {
+                  setArchivedIncubatees((prev) =>
+                    prev.map((inc) =>
+                      inc.id === incubateeId
+                        ? { ...inc, founders: inc.founders.filter((f) => f.id !== founder.id) }
+                        : inc
+                    )
+                  );
+                }
+              }}
             />
           ) : activeTab === 'team' ? (
             <Team

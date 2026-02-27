@@ -732,7 +732,7 @@ export function Archives({
                           </td>
                           <td className="p-4 text-gray-600 text-sm">{founder.email}</td>
                           <td className="p-4 text-gray-600 text-sm">{founder.phone}</td>
-                          <td className="p-4 text-gray-600 text-sm">{founder.role}</td>
+                          <td className="p-4 text-gray-600 text-sm">{(founder.roles ?? []).join(', ') || '—'}</td>
                           <td className="p-4 text-gray-600 text-sm">
                             {founder.startupName}
                             {founder.incubateeId === 'deleted' && (

@@ -364,7 +364,7 @@ export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAd
                             {founder.name}
                           </p>
                           <p className="text-sm text-gray-500 truncate">
-                            {founder.role} • {founder.email}
+                            {founder.roles && founder.roles.length > 0 ? founder.roles.join(', ') : '—'} • {founder.email}
                           </p>
                         </div>
                         <button
@@ -440,12 +440,24 @@ function FounderForm({ founder, allFounders, onSave, onClose }: FounderFormProps
     name: founder?.name || '',
     email: founder?.email || '',
     phone: founder?.phone || '',
-    role: founder?.role || '',
+    roles: founder?.roles ?? [],
   });
+  const [roleInput, setRoleInput] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (roleInput.trim()) {
+      const trimmed = roleInput.trim();
+      if (!formData.roles.includes(trimmed)) {
+        const updated = { ...formData, roles: [...formData.roles, trimmed] };
+        if (mode === 'existing' && selectedFounderId) {
+          const selectedFounder = allFounders.find(f => f.id === selectedFounderId);
+          if (selectedFounder) { onSave(selectedFounder); return; }
+        }
+        onSave(updated);
+        return;
+      }
+    }
     if (mode === 'existing' && selectedFounderId) {
       const selectedFounder = allFounders.find(f => f.id === selectedFounderId);
       if (selectedFounder) {
@@ -453,6 +465,26 @@ function FounderForm({ founder, allFounders, onSave, onClose }: FounderFormProps
       }
     } else {
       onSave(formData);
+    }
+  };
+
+  const addRole = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed && !formData.roles.includes(trimmed)) {
+      setFormData((prev) => ({ ...prev, roles: [...prev.roles, trimmed] }));
+    }
+    setRoleInput('');
+  };
+
+  const removeRole = (role: string) =>
+    setFormData((prev) => ({ ...prev, roles: prev.roles.filter((r) => r !== role) }));
+
+  const handleRoleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addRole(roleInput);
+    } else if (e.key === 'Backspace' && !roleInput && formData.roles.length > 0) {
+      setFormData((prev) => ({ ...prev, roles: prev.roles.slice(0, -1) }));
     }
   };
 
@@ -518,7 +550,7 @@ function FounderForm({ founder, allFounders, onSave, onClose }: FounderFormProps
                   <option value="">Choose a founder...</option>
                   {allFounders.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.name} - {f.role}
+                      {f.name} - {(f.roles ?? []).join(', ') || '—'}
                     </option>
                   ))}
                 </select>
@@ -538,7 +570,7 @@ function FounderForm({ founder, allFounders, onSave, onClose }: FounderFormProps
                               {selected.name}
                             </p>
                             <p className="text-sm text-gray-500 truncate">
-                              {selected.role} • {selected.email}
+                              {(selected.roles ?? []).join(', ') || '—'} • {selected.email}
                             </p>
                             <p className="text-sm text-gray-500 truncate">
                               {selected.phone}
@@ -572,21 +604,32 @@ function FounderForm({ founder, allFounders, onSave, onClose }: FounderFormProps
                   />
                 </div>
 
-                {/* Role */}
+                {/* Roles — tag chip */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Role / Position *
+                    Roles / Positions
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.role}
-                    onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value })
-                    }
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                    placeholder="e.g., CEO, CTO, Co-Founder"
-                  />
+                  <div className="w-full min-h-[48px] px-3 py-2 bg-white border border-gray-200 rounded-xl flex flex-wrap gap-1.5 items-center focus-within:ring-2 focus-within:ring-[#FF2B5E] focus-within:border-transparent">
+                    {formData.roles.map((r) => (
+                      <span
+                        key={r}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]"
+                      >
+                        {r}
+                        <button type="button" onClick={() => removeRole(r)} className="ml-0.5 hover:text-[#c0234f]">×</button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      value={roleInput}
+                      onChange={(e) => setRoleInput(e.target.value)}
+                      onKeyDown={handleRoleKeyDown}
+                      onBlur={() => { if (roleInput.trim()) addRole(roleInput); }}
+                      className="flex-1 min-w-[120px] outline-none text-sm py-0.5"
+                      placeholder={formData.roles.length === 0 ? 'e.g. CEO — press Enter to add' : 'Add another...'}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Press Enter or comma to add a role.</p>
                 </div>
 
                 {/* Email */}

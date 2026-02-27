@@ -12,6 +12,7 @@ interface ViewFounderProps {
 export function ViewFounder({ founder, incubatee, onClose, onSave }: ViewFounderProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Founder>(founder);
+  const [roleInput, setRoleInput] = useState('');
 
   const getStatusColor = (status: Incubatee['status']) => {
     switch (status) {
@@ -32,8 +33,29 @@ export function ViewFounder({ founder, incubatee, onClose, onSave }: ViewFounder
     setIsEditing(true);
   };
 
+  const addRole = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed && !(formData.roles ?? []).includes(trimmed)) {
+      setFormData((prev) => ({ ...prev, roles: [...(prev.roles ?? []), trimmed] }));
+    }
+    setRoleInput('');
+  };
+
+  const removeRole = (role: string) =>
+    setFormData((prev) => ({ ...prev, roles: (prev.roles ?? []).filter((r) => r !== role) }));
+
+  const handleRoleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addRole(roleInput);
+    } else if (e.key === 'Backspace' && !roleInput && (formData.roles ?? []).length > 0) {
+      setFormData((prev) => ({ ...prev, roles: (prev.roles ?? []).slice(0, -1) }));
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (roleInput.trim()) addRole(roleInput);
     onSave(formData);
     setIsEditing(false);
   };
@@ -71,10 +93,24 @@ export function ViewFounder({ founder, incubatee, onClose, onSave }: ViewFounder
                   <h3 className="text-2xl font-semibold text-gray-900 mb-2">
                     {founder.name}
                   </h3>
-                  <p className="text-gray-600 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4" />
-                    {founder.role}
-                  </p>
+                  {(founder.roles ?? []).length > 0 ? (
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {(founder.roles ?? []).map((r) => (
+                        <span
+                          key={r}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]"
+                        >
+                          <Briefcase className="w-3 h-3" />
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      No roles assigned
+                    </p>
+                  )}
                 </div>
 
                 {/* Startup Information */}
@@ -160,18 +196,36 @@ export function ViewFounder({ founder, incubatee, onClose, onSave }: ViewFounder
                 {/* Role */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Role / Position *
+                    Roles / Positions
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.role}
-                    onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value })
-                    }
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                    placeholder="e.g., CEO, CTO, Co-Founder"
-                  />
+                  <div className="w-full min-h-[48px] px-3 py-2 bg-white border border-gray-200 rounded-xl flex flex-wrap gap-1.5 items-center focus-within:ring-2 focus-within:ring-[#FF2B5E] focus-within:border-transparent">
+                    {(formData.roles ?? []).map((r) => (
+                      <span
+                        key={r}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]"
+                      >
+                        <Briefcase className="w-3 h-3" />
+                        {r}
+                        <button
+                          type="button"
+                          onClick={() => removeRole(r)}
+                          className="ml-0.5 hover:text-[#c0234f]"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      value={roleInput}
+                      onChange={(e) => setRoleInput(e.target.value)}
+                      onKeyDown={handleRoleKeyDown}
+                      onBlur={() => { if (roleInput.trim()) addRole(roleInput); }}
+                      className="flex-1 min-w-[120px] outline-none text-sm py-0.5"
+                      placeholder={(formData.roles ?? []).length === 0 ? 'e.g. CEO — press Enter to add' : 'Add another...'}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Press Enter or comma to add a role.</p>
                 </div>
 
                 {/* Email */}

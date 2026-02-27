@@ -5,7 +5,7 @@ export interface Founder {
   name: string;
   email: string;
   phone: string;
-  role: string;
+  roles: string[];
 }
 
 export interface Incubatee {

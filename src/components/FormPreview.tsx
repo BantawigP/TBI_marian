@@ -1,9 +1,31 @@
 import { useState } from 'react';
-import { FileText, User, Mail, GraduationCap, Briefcase, Calendar, Check, Loader2 } from 'lucide-react';
+import {
+  FileText, User, Mail, GraduationCap, Briefcase, Calendar, Check, Loader2,
+  Rocket, Phone, Plus, Trash2, Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabaseClient';
 
+// ── Startup form helpers ──────────────────────────────────────────────────────
+
+interface FounderEntry {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+}
+
+const emptyFounder = (): FounderEntry => ({
+  id: `f-${Date.now()}-${Math.random()}`,
+  name: '',
+  email: '',
+  phone: '',
+  role: '',
+});
+
 export function FormPreview() {
+  const [activeTab, setActiveTab] = useState<'alumni' | 'startup'>('alumni');
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -18,7 +40,7 @@ export function FormPreview() {
     company: '',
   });
 
-  const formLink = `${window.location.origin}/alumni-form`;
+  const alumniFormLink = `${window.location.origin}/alumni-form`;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -278,25 +300,140 @@ export function FormPreview() {
     });
   };
 
+  // ── Startup form state ────────────────────────────────────────────────────
+  const [startupIsSubmitting, setStartupIsSubmitting] = useState(false);
+  const [startupPrivacyAccepted, setStartupPrivacyAccepted] = useState(false);
+  const [startupErrors, setStartupErrors] = useState<Record<string, string>>({});
+  const [startupFormData, setStartupFormData] = useState({
+    startupName: '',
+    startupDescription: '',
+  });
+  const [founders, setFounders] = useState<FounderEntry[]>([emptyFounder()]);
+
+  const startupFormLink = `${window.location.origin}/startup-form`;
+
+  const handleStartupInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setStartupFormData((prev) => ({ ...prev, [name]: value }));
+    if (startupErrors[name]) setStartupErrors((prev) => ({ ...prev, [name]: '' }));
+  };
+
+  const handleFounderChange = (id: string, field: keyof FounderEntry, value: string) => {
+    setFounders((prev) => prev.map((f) => (f.id === id ? { ...f, [field]: value } : f)));
+    const key = `founder_${id}_${field}`;
+    if (startupErrors[key]) setStartupErrors((prev) => ({ ...prev, [key]: '' }));
+  };
+
+  const addFounder = () => setFounders((prev) => [...prev, emptyFounder()]);
+
+  const removeFounder = (id: string) => {
+    if (founders.length <= 1) return;
+    setFounders((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleStartupReset = () => {
+    setStartupFormData({ startupName: '', startupDescription: '' });
+    setFounders([emptyFounder()]);
+    setStartupPrivacyAccepted(false);
+    setStartupErrors({});
+  };
+
+  const validateStartup = () => {
+    const newErrors: Record<string, string> = {};
+    if (!startupFormData.startupName.trim()) newErrors.startupName = 'Startup name is required.';
+    if (!startupFormData.startupDescription.trim()) newErrors.startupDescription = 'Brief description is required.';
+    founders.forEach((f) => {
+      if (!f.name.trim()) newErrors[`founder_${f.id}_name`] = 'Founder name is required.';
+      if (!f.email.trim()) {
+        newErrors[`founder_${f.id}_email`] = 'Email is required.';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) {
+        newErrors[`founder_${f.id}_email`] = 'Please enter a valid email address.';
+      }
+      if (!f.role.trim()) newErrors[`founder_${f.id}_role`] = 'Role is required.';
+    });
+    if (!startupPrivacyAccepted) newErrors.privacy = 'You must accept the Data Privacy Policy before submitting.';
+    setStartupErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleStartupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateStartup()) { toast.error('Please fix the errors before submitting.'); return; }
+    setStartupIsSubmitting(true);
+    try {
+      const incubateePayload: Record<string, unknown> = {
+        startup_name: startupFormData.startupName.trim(),
+        startup_description: startupFormData.startupDescription.trim(),
+        cohort_level: [1],
+        status: 'Undergraduate',
+        is_active: true,
+      };
+      const { data: incubateeRow, error: incubateeError } = await supabase
+        .from('incubatees').insert(incubateePayload).select('id').single();
+      if (incubateeError) throw incubateeError;
+      const incubateeId = incubateeRow.id as number;
+      const founderRows = founders.map((f) => ({
+        incubatee_id: incubateeId,
+        name: f.name.trim(),
+        email: f.email.toLowerCase().trim(),
+        phone: f.phone.trim() || null,
+        role: f.role.trim(),
+      }));
+      const { error: foundersError } = await supabase.from('founders').insert(founderRows);
+      if (foundersError) throw foundersError;
+      toast.success('Startup registered successfully!', { description: 'The startup has been added to the incubatee database.' });
+      handleStartupReset();
+    } catch (error: any) {
+      console.error('Error submitting startup form:', error);
+      toast.error('Submission failed', { description: error.message || 'Unable to submit form. Please try again.' });
+    } finally {
+      setStartupIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl mb-2">Alumni Form Preview</h1>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-gray-600">Preview and test the alumni information form</p>
-            <p className="text-sm text-green-600 font-medium mt-1">✓ Form is live - submissions will be saved to the alumni database</p>
-          </div>
-          <button
-            onClick={() => window.open('/alumni-form', '_blank')}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            View Live Form
-          </button>
-        </div>
+        <h1 className="text-3xl mb-2">Form Preview</h1>
+        <p className="text-gray-600">Preview and test the public forms</p>
+        <p className="text-sm text-green-600 font-medium mt-1">✓ Forms are live — submissions will be saved to the database</p>
       </div>
+
+      {/* Tab Switcher */}
+      <div className="bg-white rounded-xl border border-gray-200 p-1.5 flex gap-1 w-fit">
+        <button
+          onClick={() => setActiveTab('alumni')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'alumni' ? 'bg-[#FF2B5E] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          <GraduationCap className="w-4 h-4" />
+          Alumni Form
+        </button>
+        <button
+          onClick={() => setActiveTab('startup')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'startup' ? 'bg-[#FF2B5E] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          <Rocket className="w-4 h-4" />
+          Startup / Founders Form
+        </button>
+      </div>
+
+      {/* ── ALUMNI TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === 'alumni' && (
+        <>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Alumni Form Preview</h2>
+              <p className="text-sm text-gray-600 mt-0.5">Preview and test the alumni information form</p>
+            </div>
+            <button
+              onClick={() => window.open('/alumni-form', '_blank')}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              View Live Form
+            </button>
+          </div>
 
       {/* Controls */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
@@ -628,17 +765,17 @@ export function FormPreview() {
       <div className="bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] rounded-xl p-8 text-white">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h2 className="text-2xl font-semibold mb-2">Share Form with Alumni</h2>
+            <h2 className="text-2xl font-semibold mb-2">Share Alumni Form</h2>
             <p className="text-white/90 mb-4">
               Copy the form link below and share it with your alumni network
             </p>
             <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4 flex items-center justify-between">
-              <code className="text-sm text-white font-mono">
-                {formLink}
+              <code className="text-sm text-white font-mono truncate">
+                {alumniFormLink}
               </code>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(formLink);
+                  navigator.clipboard.writeText(alumniFormLink);
                   toast.success('Link copied to clipboard!');
                 }}
                 className="ml-4 bg-white text-[#FF2B5E] px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors flex-shrink-0"
@@ -649,6 +786,263 @@ export function FormPreview() {
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {/* ── STARTUP TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === 'startup' && (
+        <>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Startup / Founders Form Preview</h2>
+              <p className="text-sm text-gray-600 mt-0.5">Preview and test the startup registration form</p>
+            </div>
+            <button
+              onClick={() => window.open('/startup-form', '_blank')}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
+            >
+              <Rocket className="w-4 h-4" />
+              View Live Form
+            </button>
+          </div>
+
+          {/* Controls */}
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-1">Preview Mode</h3>
+                <p className="text-sm text-gray-600">Switch between desktop and mobile views</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setPreviewMode('desktop')} className={`px-4 py-2 rounded-lg transition-colors ${previewMode === 'desktop' ? 'bg-[#FF2B5E] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Desktop</button>
+                <button onClick={() => setPreviewMode('mobile')} className={`px-4 py-2 rounded-lg transition-colors ${previewMode === 'mobile' ? 'bg-[#FF2B5E] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Mobile</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Startup Preview Container */}
+          <div className="bg-gray-100 rounded-xl p-8 flex items-start justify-center min-h-[600px]">
+            <div className={`bg-white rounded-xl shadow-xl transition-all ${previewMode === 'desktop' ? 'w-full max-w-4xl' : 'w-full max-w-md'}`}>
+
+              {/* Startup Form Header */}
+              <div className="bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] px-8 py-10 rounded-t-xl text-white">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <Rocket className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">MARIAN TBI Connect</h2>
+                    <p className="text-white/90 font-medium">Startup Registration Form</p>
+                  </div>
+                </div>
+                <p className="text-white/80 text-sm leading-relaxed">
+                  Register your startup with the Technology Business Incubator. Fill in your startup details and all founding members. Fields marked with <span className="font-bold">*</span> are required.
+                </p>
+              </div>
+
+              {/* Startup Form Body */}
+              <form onSubmit={handleStartupSubmit} className="px-8 py-10 space-y-10">
+
+                {/* Startup Information */}
+                <section>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Rocket className="w-5 h-5 text-[#FF2B5E]" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900">Startup Information</h3>
+                  </div>
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Startup Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        name="startupName"
+                        value={startupFormData.startupName}
+                        onChange={handleStartupInputChange}
+                        placeholder="e.g., TechVenture PH"
+                        disabled={startupIsSubmitting}
+                        className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed ${startupErrors.startupName ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                      />
+                      {startupErrors.startupName && <p className="text-red-500 text-sm mt-1">{startupErrors.startupName}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Brief Description <span className="text-red-500">*</span></label>
+                      <textarea
+                        name="startupDescription"
+                        value={startupFormData.startupDescription}
+                        onChange={handleStartupInputChange}
+                        rows={3}
+                        placeholder="Describe what your startup does..."
+                        disabled={startupIsSubmitting}
+                        className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] disabled:bg-gray-100 disabled:cursor-not-allowed resize-none ${startupErrors.startupDescription ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                      />
+                      {startupErrors.startupDescription && <p className="text-red-500 text-sm mt-1">{startupErrors.startupDescription}</p>}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Founders */}
+                <section>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Users className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Founders</h3>
+                        <p className="text-sm text-gray-500">Add all founding members of your startup</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                      {founders.length} {founders.length === 1 ? 'founder' : 'founders'}
+                    </span>
+                  </div>
+                  <div className="space-y-5">
+                    {founders.map((founder, index) => (
+                      <div key={founder.id} className="border border-gray-200 rounded-xl p-5 bg-gray-50">
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-sm font-semibold text-gray-700 bg-white border border-gray-200 px-3 py-1 rounded-full">Founder {index + 1}</span>
+                          {founders.length > 1 && (
+                            <button type="button" onClick={() => removeFounder(founder.id)} disabled={startupIsSubmitting} className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input type="text" value={founder.name} onChange={(e) => handleFounderChange(founder.id, 'name', e.target.value)} placeholder="Juan Dela Cruz" disabled={startupIsSubmitting} className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed ${startupErrors[`founder_${founder.id}_name`] ? 'border-red-400' : 'border-gray-300'}`} />
+                            </div>
+                            {startupErrors[`founder_${founder.id}_name`] && <p className="text-red-500 text-xs mt-1">{startupErrors[`founder_${founder.id}_name`]}</p>}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Role / Position <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input type="text" value={founder.role} onChange={(e) => handleFounderChange(founder.id, 'role', e.target.value)} placeholder="CEO, CTO, Co-Founder..." disabled={startupIsSubmitting} className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed ${startupErrors[`founder_${founder.id}_role`] ? 'border-red-400' : 'border-gray-300'}`} />
+                            </div>
+                            {startupErrors[`founder_${founder.id}_role`] && <p className="text-red-500 text-xs mt-1">{startupErrors[`founder_${founder.id}_role`]}</p>}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input type="email" value={founder.email} onChange={(e) => handleFounderChange(founder.id, 'email', e.target.value)} placeholder="juan@startup.com" disabled={startupIsSubmitting} className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed ${startupErrors[`founder_${founder.id}_email`] ? 'border-red-400' : 'border-gray-300'}`} />
+                            </div>
+                            {startupErrors[`founder_${founder.id}_email`] && <p className="text-red-500 text-xs mt-1">{startupErrors[`founder_${founder.id}_email`]}</p>}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone <span className="text-gray-400 font-normal">(optional)</span></label>
+                            <div className="relative">
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input type="tel" value={founder.phone} onChange={(e) => handleFounderChange(founder.id, 'phone', e.target.value)} placeholder="+63 912 345 6789" disabled={startupIsSubmitting} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Add Founder button */}
+                    <button
+                      type="button"
+                      onClick={addFounder}
+                      disabled={startupIsSubmitting}
+                      className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#FF2B5E] hover:text-[#FF2B5E] hover:bg-pink-50 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Another Founder
+                    </button>
+                  </div>
+                </section>
+
+                {/* Data Privacy — mandatory */}
+                <section className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+                  <h3 className="font-semibold text-blue-900 mb-2">Privacy &amp; Data Protection</h3>
+                  <p className="text-sm text-blue-800 leading-relaxed mb-4">
+                    The information you provide will be used exclusively for TBI program purposes and will be kept confidential in accordance with our data privacy policy and the <strong>Data Privacy Act of 2012 (R.A. 10173)</strong>.
+                  </p>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={startupPrivacyAccepted}
+                      onChange={(e) => {
+                        setStartupPrivacyAccepted(e.target.checked);
+                        if (startupErrors.privacy) setStartupErrors((prev) => ({ ...prev, privacy: '' }));
+                      }}
+                      disabled={startupIsSubmitting}
+                      className={`mt-0.5 h-4 w-4 rounded border ${startupErrors.privacy ? 'border-red-500' : 'border-blue-300'} text-[#FF2B5E] focus:ring-[#FF2B5E]/30 disabled:cursor-not-allowed flex-shrink-0`}
+                    />
+                    <span className="text-sm text-blue-900">
+                      I have read and agree to the{' '}
+                      <a href="/privacy-policy" target="_blank" rel="noreferrer" className="text-[#FF2B5E] hover:underline font-semibold">Data Privacy Policy</a>.
+                      I consent to the collection and processing of the personal information provided above.{' '}
+                      <span className="text-red-500 font-semibold">*</span>
+                    </span>
+                  </label>
+                  {startupErrors.privacy && (
+                    <p className="text-red-500 text-sm mt-2 font-medium">{startupErrors.privacy}</p>
+                  )}
+                </section>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={handleStartupReset} disabled={startupIsSubmitting} className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Reset Form</button>
+                  <button type="submit" disabled={startupIsSubmitting} className="flex-1 px-6 py-3 bg-[#FF2B5E] text-white rounded-xl hover:bg-[#E6275A] transition-colors font-semibold flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {startupIsSubmitting ? (<><Loader2 className="w-4 h-4 animate-spin" />Submitting…</>) : (<><Check className="w-4 h-4" />Submit Registration</>)}
+                  </button>
+                </div>
+              </form>
+
+              <div className="bg-gray-50 px-8 py-4 rounded-b-xl border-t border-gray-200">
+                <p className="text-xs text-gray-600 text-center">Having trouble? Contact us at <span className="text-[#FF2B5E]">support@mariantbi.edu</span></p>
+              </div>
+            </div>
+          </div>
+
+          {/* Startup Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4"><Check className="w-6 h-6 text-green-600" /></div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-1">42</h3>
+              <p className="text-sm text-gray-600">Startups Registered</p>
+              <p className="text-xs text-green-600 mt-2">+5 this month</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4"><Users className="w-6 h-6 text-blue-600" /></div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-1">127</h3>
+              <p className="text-sm text-gray-600">Total Founders</p>
+              <p className="text-xs text-blue-600 mt-2">Avg. 3 per startup</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4"><Calendar className="w-6 h-6 text-purple-600" /></div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-1">4.8 min</h3>
+              <p className="text-sm text-gray-600">Average Time</p>
+              <p className="text-xs text-purple-600 mt-2">Per submission</p>
+            </div>
+          </div>
+
+          {/* Startup Form Link */}
+          <div className="bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] rounded-xl p-8 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h2 className="text-2xl font-semibold mb-2">Share Startup Registration Form</h2>
+                <p className="text-white/90 mb-4">Copy the form link below and share it with startup founders</p>
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4 flex items-center justify-between">
+                  <code className="text-sm text-white font-mono truncate">{startupFormLink}</code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(startupFormLink); toast.success('Link copied to clipboard!'); }}
+                    className="ml-4 bg-white text-[#FF2B5E] px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors flex-shrink-0"
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -634,7 +634,8 @@ export function Archives({
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                               inc.status === 'Graduate' ? 'bg-green-100 text-green-700' :
                               inc.status === 'Incubatee' ? 'bg-blue-100 text-blue-700' :
-                              inc.status === 'Undergraduate' ? 'bg-yellow-100 text-yellow-700' :
+                              inc.status === 'Incubatee Extended' ? 'bg-purple-100 text-purple-700' :
+                              inc.status === 'Applicant' ? 'bg-yellow-100 text-yellow-700' :
                               'bg-gray-100 text-gray-700'
                             }`}>
                               {inc.status}

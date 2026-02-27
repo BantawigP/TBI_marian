@@ -365,7 +365,7 @@ export function FormPreview() {
         startup_name: startupFormData.startupName.trim(),
         startup_description: startupFormData.startupDescription.trim(),
         cohort_level: [1],
-        status: 'Undergraduate',
+        status: 'Applicant',
         is_active: true,
       };
       const { data: incubateeRow, error: incubateeError } = await supabase

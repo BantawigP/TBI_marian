@@ -106,7 +106,7 @@ export function StartupForm() {
         startup_name: formData.startupName.trim(),
         startup_description: formData.startupDescription.trim(),
         cohort_level: [1],
-        status: 'Undergraduate',
+        status: 'Applicant',
         is_active: true,
       };
 

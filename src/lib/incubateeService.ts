@@ -52,7 +52,7 @@ function mapIncubateeRow(row: IncubateeRow): Incubatee {
     startupDescription: row.startup_description,
     googleDriveLink: row.google_drive_link || '',
     notes: row.notes || '',
-    status: row.status as Incubatee['status'],
+    status: row.status as string,
     founders: (row.founders || []).map(mapFounderRow),
   };
 }
@@ -616,5 +616,64 @@ export async function addCohortLevel(level: number): Promise<CohortLevelOption> 
   } catch {
     console.warn('⚠️ Could not save cohort level to DB');
     return { id: 0, level };
+  }
+}
+
+// ─── STATUS OPTIONS ────────────────────────────────────────────
+
+export interface StatusOption {
+  id: number;
+  name: string;
+}
+
+const DEFAULT_STATUSES = ['Applicant', 'Incubatee', 'Incubatee Extended', 'Graduate'];
+
+/**
+ * Fetch all status options from the incubatee_statuses table.
+ * Falls back to defaults if the table doesn't exist or is empty.
+ */
+export async function fetchStatusOptions(): Promise<StatusOption[]> {
+  try {
+    const { data, error } = await supabase
+      .from('incubatee_statuses')
+      .select('id, name')
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.warn('⚠️ Could not fetch incubatee_statuses, using defaults:', error.message);
+      return DEFAULT_STATUSES.map((s, i) => ({ id: i + 1, name: s }));
+    }
+
+    if (!data || data.length === 0) {
+      return DEFAULT_STATUSES.map((s, i) => ({ id: i + 1, name: s }));
+    }
+
+    return data as StatusOption[];
+  } catch {
+    return DEFAULT_STATUSES.map((s, i) => ({ id: i + 1, name: s }));
+  }
+}
+
+/**
+ * Add a new status option to the database. Returns the saved option.
+ */
+export async function addStatusOption(name: string): Promise<StatusOption> {
+  try {
+    const { data, error } = await supabase
+      .from('incubatee_statuses')
+      .upsert({ name }, { onConflict: 'name' })
+      .select('id, name')
+      .single();
+
+    if (error) {
+      console.warn('⚠️ Could not save status option to DB:', error.message);
+      return { id: 0, name };
+    }
+
+    console.log('✅ Added status option:', data.name);
+    return data as StatusOption;
+  } catch {
+    console.warn('⚠️ Could not save status option to DB');
+    return { id: 0, name };
   }
 }

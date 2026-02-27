@@ -52,6 +52,7 @@ import {
   addCohortLevel as addCohortLevelToDb,
   deleteFounders as deleteFoundersFromSupabase,
   unassignFounders as unassignFoundersInDb,
+  linkFounderToIncubatee as linkFounderToIncubateeInDb,
 } from './lib/incubateeService';
 import type { CohortLevelOption } from './lib/incubateeService';
 
@@ -1682,6 +1683,31 @@ export default function App() {
     }
   };
 
+  const handleLinkFounderToIncubatee = async (incubateeId: string, existingFounder: Founder) => {
+    // Move the founder from its current location to the target incubatee in local state
+    setUnassignedFounders((prev) => prev.filter((f) => f.id !== existingFounder.id));
+    setIncubatees((prev) =>
+      prev.map((inc) => {
+        // Remove from any existing incubatee
+        const without = inc.founders.filter((f) => f.id !== existingFounder.id);
+        if (inc.id === incubateeId) {
+          return { ...inc, founders: [...without, existingFounder] };
+        }
+        return { ...inc, founders: without };
+      })
+    );
+    setShowAddFounderModal(false);
+
+    // Persist to DB
+    try {
+      await linkFounderToIncubateeInDb(existingFounder.id, incubateeId);
+      console.log('✅ Founder linked to incubatee in database');
+    } catch (error) {
+      console.error('❌ Failed to link founder:', error);
+      setSyncError('Founder linked locally but failed to sync with database.');
+    }
+  };
+
   const handleNewContact = () => {
     setEditingContact(null);
     setShowForm(true);
@@ -2692,8 +2718,13 @@ export default function App() {
       {showAddFounderModal && (
         <AddFounderModal
           incubatees={incubatees}
+          allFounders={[
+            ...incubatees.flatMap((inc) => inc.founders.map((f) => ({ ...f, startupName: inc.startupName }))),
+            ...unassignedFounders.map((f) => ({ ...f, startupName: '—' })),
+          ]}
           onClose={() => setShowAddFounderModal(false)}
           onSave={handleAddFounderToIncubatee}
+          onLinkExisting={handleLinkFounderToIncubatee}
         />
       )}
 

@@ -1,29 +1,70 @@
-import { X, Plus, Trash2, Edit2 } from 'lucide-react';
-import { useState } from 'react';
+import { X, Plus, Trash2, Edit2, ChevronDown } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { Incubatee, Founder } from './IncubateeTable';
+import type { CohortLevelOption } from '../lib/incubateeService';
 
 interface IncubateeFormProps {
   incubatee?: Incubatee | null;
   allFounders: Founder[];
+  cohortLevelOptions: CohortLevelOption[];
+  onAddCohortLevel: (level: number) => Promise<CohortLevelOption>;
   onSave: (incubatee: Incubatee) => void;
   onClose: () => void;
 }
 
-export function IncubateeForm({ incubatee, allFounders, onSave, onClose }: IncubateeFormProps) {
+export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAddCohortLevel, onSave, onClose }: IncubateeFormProps) {
   const [formData, setFormData] = useState<Incubatee>({
     id: incubatee?.id || `inc_${Date.now()}`,
     startupName: incubatee?.startupName || '',
-    cohortLevel: incubatee?.cohortLevel || 1,
+    cohortLevel: incubatee?.cohortLevel || [],
     startupDescription: incubatee?.startupDescription || '',
+    googleDriveLink: incubatee?.googleDriveLink || '',
+    notes: incubatee?.notes || '',
     founders: incubatee?.founders || [],
     status: incubatee?.status || 'Incubatee',
   });
 
   const [showFounderForm, setShowFounderForm] = useState(false);
   const [editingFounder, setEditingFounder] = useState<Founder | null>(null);
+  const [cohortDropdownOpen, setCohortDropdownOpen] = useState(false);
+  const [customCohort, setCustomCohort] = useState('');
+  const cohortDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (cohortDropdownRef.current && !cohortDropdownRef.current.contains(e.target as Node)) {
+        setCohortDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Helper to add a custom cohort level typed by the user
+  const handleAddCustomCohort = async () => {
+    const num = parseInt(customCohort.trim(), 10);
+    if (!num || num <= 0) return;
+    if (formData.cohortLevel.includes(num)) {
+      setCustomCohort('');
+      return;
+    }
+    setFormData({
+      ...formData,
+      cohortLevel: [...formData.cohortLevel, num].sort((a, b) => a - b),
+    });
+    const exists = cohortLevelOptions.some((o) => o.level === num);
+    if (!exists) {
+      try { await onAddCohortLevel(num); } catch { /* ignore */ }
+    }
+    setCustomCohort('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.cohortLevel.length === 0) {
+      alert('Please select at least one Cohort Level.');
+      return;
+    }
     onSave(formData);
   };
 
@@ -97,26 +138,115 @@ export function IncubateeForm({ incubatee, allFounders, onSave, onClose }: Incub
               </div>
 
               {/* Cohort Level */}
-              <div>
+              <div ref={cohortDropdownRef} className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Cohort Level *
                 </label>
-                <select
-                  required
-                  value={formData.cohortLevel}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      cohortLevel: parseInt(e.target.value) as 1 | 2 | 3 | 4,
-                    })
-                  }
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                >
-                  <option value={1}>Cohort 1</option>
-                  <option value={2}>Cohort 2</option>
-                  <option value={3}>Cohort 3</option>
-                  <option value={4}>Cohort 4</option>
-                </select>
+                {/* Selected cohort tags */}
+                {formData.cohortLevel.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.cohortLevel.map((level) => (
+                      <span
+                        key={level}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-[#FF2B5E]/10 text-[#FF2B5E]"
+                      >
+                        Cohort {level}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              cohortLevel: formData.cohortLevel.filter((l) => l !== level),
+                            })
+                          }
+                          className="ml-0.5 hover:text-[#E6275A]"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customCohort}
+                    onChange={(e) => {
+                      setCustomCohort(e.target.value);
+                      if (!cohortDropdownOpen) setCohortDropdownOpen(true);
+                    }}
+                    onFocus={() => setCohortDropdownOpen(true)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        await handleAddCustomCohort();
+                      }
+                    }}
+                    placeholder={formData.cohortLevel.length > 0 ? 'Add more...' : 'Select or type a cohort level...'}
+                    className={`w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent ${
+                      (() => { const n = parseInt(customCohort.trim(), 10); return n > 0 && !formData.cohortLevel.includes(n); })() ? 'pr-20' : 'pr-10'
+                    }`}
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {(() => {
+                      const num = parseInt(customCohort.trim(), 10);
+                      const isNewValid = num > 0 && !formData.cohortLevel.includes(num);
+                      return isNewValid ? (
+                        <button
+                          type="button"
+                          onClick={handleAddCustomCohort}
+                          className="p-1.5 text-white bg-[#FF2B5E] hover:bg-[#E6275A] rounded transition-colors"
+                          title={`Add Cohort ${num}`}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      ) : null;
+                    })()}
+                    <button
+                      type="button"
+                      onClick={() => setCohortDropdownOpen(!cohortDropdownOpen)}
+                      className="p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform ${cohortDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+                {cohortDropdownOpen && (() => {
+                  const dbLevels = cohortLevelOptions.map((o) => o.level);
+                  const allOptions = [...new Set([...dbLevels, ...formData.cohortLevel])].sort((a, b) => a - b);
+                  const query = customCohort.trim();
+                  const filtered = query
+                    ? allOptions.filter((l) => String(l).includes(query))
+                    : allOptions;
+                  return filtered.length > 0 ? (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
+                      {filtered.map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => {
+                            const isSelected = formData.cohortLevel.includes(level);
+                            const updated = isSelected
+                              ? formData.cohortLevel.filter((l) => l !== level)
+                              : [...formData.cohortLevel, level].sort((a, b) => a - b);
+                            setFormData({ ...formData, cohortLevel: updated });
+                            setCustomCohort('');
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                            formData.cohortLevel.includes(level)
+                              ? 'bg-[#FF2B5E]/5 text-[#FF2B5E] font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span>Cohort {level}</span>
+                          {formData.cohortLevel.includes(level) && (
+                            <span className="text-[#FF2B5E] text-xs">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               {/* Startup Description */}
@@ -136,6 +266,38 @@ export function IncubateeForm({ incubatee, allFounders, onSave, onClose }: Incub
                   rows={4}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent resize-none"
                   placeholder="Describe the startup..."
+                />
+              </div>
+
+              {/* Google Drive Link */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Google Drive Link
+                </label>
+                <input
+                  type="url"
+                  value={formData.googleDriveLink || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, googleDriveLink: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="https://drive.google.com/..."
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  value={formData.notes || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent resize-none"
+                  placeholder="Add notes about this incubatee..."
                 />
               </div>
 

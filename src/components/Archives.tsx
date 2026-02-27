@@ -1,7 +1,7 @@
 import { Users, Calendar, RotateCcw, Trash2, AlertCircle, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
 import type { Contact, Event, TeamMember } from '../types';
-import type { Incubatee } from './IncubateeTable';
+import type { Incubatee, Founder } from './IncubateeTable';
 import { PopupDialog } from './PopupDialog';
 
 interface ArchivesProps {
@@ -9,6 +9,7 @@ interface ArchivesProps {
   archivedEvents: Event[];
   archivedTeamMembers: TeamMember[];
   archivedIncubatees: Incubatee[];
+  archivedFounders: (Founder & { startupName: string })[];
   onRestoreContact: (contact: Contact) => void;
   onRestoreEvent: (event: Event) => void;
   onPermanentDeleteContact: (contactId: string) => void;
@@ -17,6 +18,9 @@ interface ArchivesProps {
   onPermanentDeleteTeamMember: (memberId: string) => void | Promise<void>;
   onRestoreIncubatee: (incubatee: Incubatee) => void | Promise<void>;
   onPermanentDeleteIncubatee: (id: string) => void | Promise<void>;
+  onDeleteArchivedFounder: (founderId: string) => void;
+  onRemoveFounderFromIncubatee: (incubateeId: string, founderId: string) => void;
+  onRestoreFounder: (founder: Founder, incubateeId: string | null) => void | Promise<void>;
 }
 
 export function Archives({
@@ -24,6 +28,7 @@ export function Archives({
   archivedEvents,
   archivedTeamMembers,
   archivedIncubatees,
+  archivedFounders: orphanedFounders,
   onRestoreContact,
   onRestoreEvent,
   onPermanentDeleteContact,
@@ -32,6 +37,9 @@ export function Archives({
   onPermanentDeleteTeamMember,
   onRestoreIncubatee,
   onPermanentDeleteIncubatee,
+  onDeleteArchivedFounder,
+  onRemoveFounderFromIncubatee,
+  onRestoreFounder,
 }: ArchivesProps) {
   const [activeTab, setActiveTab] = useState<'contacts' | 'events' | 'team' | 'incubatees'>('contacts');
   const [dialog, setDialog] = useState<{
@@ -153,7 +161,7 @@ export function Archives({
   const handlePermanentDeleteIncubatee = async (id: string, name: string) => {
     const confirmed = await openConfirm({
       title: 'Permanently delete incubatee',
-      message: `Permanently delete "${name}" and all its founders? This action cannot be undone.`,
+      message: `Permanently delete "${name}"? Its founders will be preserved. This action cannot be undone.`,
       confirmLabel: 'Delete',
       tone: 'danger',
     });
@@ -162,10 +170,46 @@ export function Archives({
     }
   };
 
-  // Gather all founders from archived incubatees for the Founders section
-  const archivedFounders = archivedIncubatees.flatMap((inc) =>
+  const handlePermanentDeleteFounder = async (founder: typeof allArchivedFounders[number]) => {
+    const confirmed = await openConfirm({
+      title: 'Delete founder',
+      message: `Permanently delete "${founder.name}"? The startup will not be affected.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (confirmed) {
+      if (founder.incubateeId === 'deleted') {
+        onDeleteArchivedFounder(founder.id);
+      } else {
+        onRemoveFounderFromIncubatee(founder.incubateeId, founder.id);
+      }
+    }
+  };
+
+  const handleRestoreFounder = async (founder: typeof allArchivedFounders[number]) => {
+    const confirmed = await openConfirm({
+      title: 'Restore founder',
+      message: `Restore "${founder.name}"?`,
+      tone: 'primary',
+    });
+    if (confirmed) {
+      const incId = founder.incubateeId === 'deleted' ? null : founder.incubateeId;
+      const { startupName: _s, incubateeId: _i, ...founderOnly } = founder;
+      onRestoreFounder(founderOnly, incId);
+      if (founder.incubateeId === 'deleted') {
+        onDeleteArchivedFounder(founder.id);
+      }
+    }
+  };
+
+  // Gather all founders: from archived incubatees + orphaned founders from deleted startups
+  const incubateeFounders = archivedIncubatees.flatMap((inc) =>
     inc.founders.map((f) => ({ ...f, startupName: inc.startupName, incubateeId: inc.id }))
   );
+  const allArchivedFounders = [
+    ...incubateeFounders,
+    ...orphanedFounders.map((f) => ({ ...f, incubateeId: 'deleted' as string })),
+  ];
 
   return (
     <div className="space-y-8">
@@ -640,9 +684,9 @@ export function Archives({
           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Users className="w-5 h-5 text-[#FF2B5E]" />
-              Founders ({archivedFounders.length})
+              Founders ({allArchivedFounders.length})
             </h2>
-            {archivedFounders.length > 0 ? (
+            {allArchivedFounders.length > 0 ? (
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -663,14 +707,17 @@ export function Archives({
                         <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
                           Startup
                         </th>
+                        <th className="text-left p-4 text-sm text-gray-600 uppercase tracking-wide">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {archivedFounders.map((founder, index) => (
+                      {allArchivedFounders.map((founder, index) => (
                         <tr
                           key={`${founder.incubateeId}-${founder.id}`}
                           className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                            index === archivedFounders.length - 1 ? 'border-b-0' : ''
+                            index === allArchivedFounders.length - 1 ? 'border-b-0' : ''
                           }`}
                         >
                           <td className="p-4">
@@ -686,7 +733,30 @@ export function Archives({
                           <td className="p-4 text-gray-600 text-sm">{founder.email}</td>
                           <td className="p-4 text-gray-600 text-sm">{founder.phone}</td>
                           <td className="p-4 text-gray-600 text-sm">{founder.role}</td>
-                          <td className="p-4 text-gray-600 text-sm">{founder.startupName}</td>
+                          <td className="p-4 text-gray-600 text-sm">
+                            {founder.startupName}
+                            {founder.incubateeId === 'deleted' && (
+                              <span className="ml-1 text-xs text-gray-400">(deleted)</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleRestoreFounder(founder)}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Restore founder"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handlePermanentDeleteFounder(founder)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Permanently delete founder"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

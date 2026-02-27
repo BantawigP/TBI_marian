@@ -132,6 +132,19 @@ export function StartupForm() {
       const { error: foundersError } = await supabase.from('founders').insert(founderRows);
       if (foundersError) throw foundersError;
 
+      // 3. Send confirmation emails to each founder (non-blocking — UI still succeeds even if email fails)
+      try {
+        await supabase.functions.invoke('send-incubation-confirmation', {
+          body: {
+            startupName: formData.startupName.trim(),
+            founders: founders.map((f) => ({ name: f.name.trim(), email: f.email.toLowerCase().trim() })),
+          },
+        });
+      } catch (emailErr) {
+        // Log but do not block the success flow
+        console.warn('Confirmation email(s) could not be sent:', emailErr);
+      }
+
       setIsSubmitted(true);
     } catch (error: any) {
       console.error('Error submitting startup form:', error);
@@ -153,8 +166,11 @@ export function StartupForm() {
             <Check className="w-10 h-10 text-green-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-3">Submission Received!</h2>
-          <p className="text-gray-600 mb-6 leading-relaxed">
+          <p className="text-gray-600 mb-3 leading-relaxed">
             Thank you for registering your startup with MARIAN TBI Connect. Our team will review your application and get in touch with you soon.
+          </p>
+          <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-6 leading-relaxed">
+            📧 A confirmation email has been sent to each founder's email address. Please check your inbox (and spam folder) for the notification.
           </p>
           <button
             onClick={() => { setIsSubmitted(false); handleReset(); }}

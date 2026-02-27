@@ -461,6 +461,49 @@ export async function updateFounder(founder: Founder): Promise<Founder> {
   return mapFounderRow(data);
 }
 
+// ─── DELETE Founders ───────────────────────────────────────────
+
+/**
+ * Permanently delete founders by their IDs.
+ */
+export async function deleteFounders(ids: string[]): Promise<void> {
+  const numericIds = ids.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+  if (numericIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('founders')
+    .delete()
+    .in('id', numericIds);
+
+  if (error) {
+    console.error('❌ Error deleting founders:', error);
+    throw error;
+  }
+
+  console.log(`🗑️ Deleted ${numericIds.length} founder(s)`);
+}
+
+/**
+ * Detach founders from their incubatees by setting incubatee_id = null.
+ * Used when archiving founders — they remain in the DB as unassigned.
+ */
+export async function unassignFounders(ids: string[]): Promise<void> {
+  const numericIds = ids.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+  if (numericIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('founders')
+    .update({ incubatee_id: null })
+    .in('id', numericIds);
+
+  if (error) {
+    console.error('❌ Error unassigning founders:', error);
+    throw error;
+  }
+
+  console.log(`📦 Unassigned (archived) ${numericIds.length} founder(s)`);
+}
+
 // ─── COHORT LEVELS ─────────────────────────────────────────────
 
 export interface CohortLevelOption {

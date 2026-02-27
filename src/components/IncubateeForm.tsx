@@ -1,27 +1,29 @@
 import { X, Plus, Trash2, Edit2, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Incubatee, Founder } from './IncubateeTable';
-import type { CohortLevelOption } from '../lib/incubateeService';
+import type { CohortLevelOption, StatusOption } from '../lib/incubateeService';
 
 interface IncubateeFormProps {
   incubatee?: Incubatee | null;
   allFounders: Founder[];
   cohortLevelOptions: CohortLevelOption[];
   onAddCohortLevel: (level: number) => Promise<CohortLevelOption>;
+  statusOptions: StatusOption[];
+  onAddStatus: (name: string) => Promise<StatusOption>;
   onSave: (incubatee: Incubatee) => void;
   onClose: () => void;
 }
 
-export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAddCohortLevel, onSave, onClose }: IncubateeFormProps) {
+export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAddCohortLevel, statusOptions, onAddStatus, onSave, onClose }: IncubateeFormProps) {
   const [formData, setFormData] = useState<Incubatee>({
     id: incubatee?.id || `inc_${Date.now()}`,
     startupName: incubatee?.startupName || '',
-    cohortLevel: incubatee?.cohortLevel || [],
+    cohortLevel: incubatee?.cohortLevel || [1],
     startupDescription: incubatee?.startupDescription || '',
     googleDriveLink: incubatee?.googleDriveLink || '',
     notes: incubatee?.notes || '',
     founders: incubatee?.founders || [],
-    status: incubatee?.status || 'Incubatee',
+    status: incubatee?.status || 'Applicant',
   });
 
   const [showFounderForm, setShowFounderForm] = useState(false);
@@ -29,11 +31,17 @@ export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAd
   const [cohortDropdownOpen, setCohortDropdownOpen] = useState(false);
   const [customCohort, setCustomCohort] = useState('');
   const cohortDropdownRef = useRef<HTMLDivElement>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [statusSearch, setStatusSearch] = useState(incubatee?.status || 'Applicant');
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (cohortDropdownRef.current && !cohortDropdownRef.current.contains(e.target as Node)) {
         setCohortDropdownOpen(false);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -59,10 +67,25 @@ export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAd
     setCustomCohort('');
   };
 
+  // Helper to select or add a custom status
+  const handleSelectStatus = async (name: string) => {
+    setFormData({ ...formData, status: name });
+    setStatusSearch(name);
+    setStatusDropdownOpen(false);
+    const exists = statusOptions.some((o) => o.name === name);
+    if (!exists) {
+      try { await onAddStatus(name); } catch { /* ignore */ }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.cohortLevel.length === 0) {
       alert('Please select at least one Cohort Level.');
+      return;
+    }
+    if (!formData.status.trim()) {
+      alert('Please select or enter a Status.');
       return;
     }
     onSave(formData);
@@ -302,26 +325,68 @@ export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAd
               </div>
 
               {/* Status */}
-              <div>
+              <div ref={statusDropdownRef} className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Status *
                 </label>
-                <select
-                  required
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      status: e.target.value as Incubatee['status'],
-                    })
-                  }
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                >
-                  <option value="Incubatee">Incubatee</option>
-                  <option value="Graduate">Graduate</option>
-                  <option value="Undergraduate">Undergraduate</option>
-                  <option value="Parked">Parked</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={statusSearch}
+                    onChange={(e) => {
+                      setStatusSearch(e.target.value);
+                      setFormData({ ...formData, status: e.target.value });
+                      if (!statusDropdownOpen) setStatusDropdownOpen(true);
+                    }}
+                    onFocus={() => setStatusDropdownOpen(true)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = statusSearch.trim();
+                        if (val) {
+                          await handleSelectStatus(val);
+                        }
+                      }
+                    }}
+                    placeholder="Select or type a status..."
+                    className="w-full px-4 py-3 pr-10 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                {statusDropdownOpen && (() => {
+                  const allNames = [...new Set(statusOptions.map((o) => o.name))];
+                  const query = statusSearch.trim().toLowerCase();
+                  const filtered = query
+                    ? allNames.filter((n) => n.toLowerCase().includes(query))
+                    : allNames;
+                  return filtered.length > 0 ? (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
+                      {filtered.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => handleSelectStatus(name)}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                            formData.status === name
+                              ? 'bg-[#FF2B5E]/5 text-[#FF2B5E] font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span>{name}</span>
+                          {formData.status === name && (
+                            <span className="text-[#FF2B5E] text-xs">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               {/* Founders */}

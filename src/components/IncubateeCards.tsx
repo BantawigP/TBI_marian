@@ -14,16 +14,16 @@ export function IncubateeCards({ incubatees, selectedIncubatees, setSelectedIncu
   const [truncatedDescriptions, setTruncatedDescriptions] = useState<Set<string>>(new Set());
   const descriptionRefs = useRef<{ [key: string]: HTMLParagraphElement | null }>({});
 
-  const getStatusColor = (status: Incubatee['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'Graduate':
         return 'bg-green-100 text-green-700';
       case 'Incubatee':
         return 'bg-blue-100 text-blue-700';
-      case 'Undergraduate':
+      case 'Incubatee Extended':
+        return 'bg-purple-100 text-purple-700';
+      case 'Applicant':
         return 'bg-yellow-100 text-yellow-700';
-      case 'Parked':
-        return 'bg-gray-100 text-gray-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }
@@ -157,7 +157,7 @@ export function IncubateeCards({ incubatees, selectedIncubatees, setSelectedIncu
                           {founder.name}
                         </p>
                         <p className="text-xs text-gray-500 truncate">
-                          {founder.role}
+                          {founder.roles.join(', ')}
                         </p>
                       </div>
                     </div>

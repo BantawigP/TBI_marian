@@ -13,6 +13,7 @@ import { ContactForm } from './components/ContactForm';
 import { ViewContact } from './components/ViewContact';
 import { ImportContact } from './components/ImportContact';
 import { ExportContact } from './components/ExportContact';
+import { ExportIncubatee } from './components/ExportIncubatee';
 import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
@@ -518,6 +519,7 @@ export default function App() {
   const [showAddFounderModal, setShowAddFounderModal] = useState(false);
   const [incubateeViewMode, setIncubateeViewMode] = useState<'Startup' | 'founders'>('Startup');
   const [showDeleteIncubateeConfirm, setShowDeleteIncubateeConfirm] = useState(false);
+  const [showIncubateeExport, setShowIncubateeExport] = useState(false);
   const [showDeleteFounderConfirm, setShowDeleteFounderConfirm] = useState(false);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
@@ -1469,6 +1471,7 @@ export default function App() {
     setViewingFounder(null);
     setShowAddFounderModal(false);
     setShowDeleteIncubateeConfirm(false);
+    setShowIncubateeExport(false);
     localStorage.removeItem('auth_method');
   };
 
@@ -2424,6 +2427,14 @@ export default function App() {
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </button>
+                      <button
+                        onClick={() => setShowIncubateeExport(true)}
+                        disabled={incubatees.length === 0}
+                        className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export
+                      </button>
                     </>
                   ) : (
                     <>
@@ -2665,6 +2676,14 @@ export default function App() {
           contacts={contacts}
           selectedContacts={selectedContacts}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showIncubateeExport && (
+        <ExportIncubatee
+          incubatees={incubatees}
+          selectedIncubatees={selectedIncubatees}
+          onClose={() => setShowIncubateeExport(false)}
         />
       )}
 

@@ -1,6 +1,8 @@
 import { ArrowLeft, X, Download, FileSpreadsheet, Check } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { Incubatee } from './IncubateeTable';
+import { fetchStartupAssessment, type StartupAssessment } from '../lib/assessmentService';
+import { ASSESSMENT_AREAS } from '../lib/assessmentCompetencies';
 
 interface ExportIncubateeProps {
   incubatees: Incubatee[];
@@ -17,6 +19,14 @@ type IncubateeFieldKey =
   | 'startupDescription'
   | 'googleDriveLink'
   | 'notes'
+  | 'assessmentStrategyBusinessModel'
+  | 'assessmentProductTechnologyDevelopment'
+  | 'assessmentFundingFinancials'
+  | 'assessmentLegalCompliance'
+  | 'assessmentSoftSkillManagement'
+  | 'assessmentMarketingSales'
+  | 'assessmentTotalPoints'
+  | 'assessmentOtherCriticalSkills'
   | 'founderCount'
   | 'founderNames'
   | 'founderEmails'
@@ -30,6 +40,14 @@ const availableFields: { key: IncubateeFieldKey; label: string }[] = [
   { key: 'startupDescription', label: 'Startup Description' },
   { key: 'googleDriveLink', label: 'Google Drive Link' },
   { key: 'notes', label: 'Notes' },
+  { key: 'assessmentStrategyBusinessModel', label: 'Assessment: Strategy & Business Model' },
+  { key: 'assessmentProductTechnologyDevelopment', label: 'Assessment: Product & Technology Development' },
+  { key: 'assessmentFundingFinancials', label: 'Assessment: Funding & Financials' },
+  { key: 'assessmentLegalCompliance', label: 'Assessment: Legal & Compliance' },
+  { key: 'assessmentSoftSkillManagement', label: 'Assessment: Soft Skill & Management' },
+  { key: 'assessmentMarketingSales', label: 'Assessment: Marketing & Sales' },
+  { key: 'assessmentTotalPoints', label: 'Assessment: Total Points' },
+  { key: 'assessmentOtherCriticalSkills', label: 'Assessment: Other Critical Skills' },
   { key: 'founderCount', label: 'Founder Count' },
   { key: 'founderNames', label: 'Founder Names' },
   { key: 'founderEmails', label: 'Founder Emails' },
@@ -45,11 +63,13 @@ export function ExportIncubatee({ incubatees, selectedIncubatees, onClose }: Exp
     'startupName',
     'cohortLevel',
     'status',
+    'assessmentTotalPoints',
     'founderNames',
     'founderEmails',
     'founderPhones',
     'founderRoles',
   ]);
+  const [assessmentsByIncubateeId, setAssessmentsByIncubateeId] = useState<Record<string, StartupAssessment | null>>({});
 
   useEffect(() => {
     if (!singleStartupId && incubatees.length > 0) {
@@ -61,6 +81,33 @@ export function ExportIncubatee({ incubatees, selectedIncubatees, onClose }: Exp
       setSingleStartupId(incubatees[0]?.id ?? '');
     }
   }, [incubatees, singleStartupId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAssessments = async () => {
+      const entries = await Promise.all(
+        incubatees.map(async (incubatee) => {
+          try {
+            const assessment = await fetchStartupAssessment(incubatee.id);
+            return [incubatee.id, assessment] as const;
+          } catch {
+            return [incubatee.id, null] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setAssessmentsByIncubateeId(Object.fromEntries(entries));
+    };
+
+    loadAssessments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [incubatees]);
 
   const exportIncubatees = useMemo(() => {
     if (scope === 'selected') {
@@ -86,6 +133,19 @@ export function ExportIncubatee({ incubatees, selectedIncubatees, onClose }: Exp
   };
 
   const mapIncubateeToRow = (incubatee: Incubatee): Record<IncubateeFieldKey, string> => {
+    const assessment = assessmentsByIncubateeId[incubatee.id] || null;
+
+    const averageForArea = (areaId: (typeof ASSESSMENT_AREAS)[number]['id']) => {
+      if (!assessment) return '';
+      const area = ASSESSMENT_AREAS.find((item) => item.id === areaId);
+      if (!area) return '';
+      const sum = area.competencies.reduce(
+        (total, competency) => total + (assessment.competencyRatings[competency.key] ?? 0),
+        0
+      );
+      return (sum / area.competencies.length).toFixed(2);
+    };
+
     const founderNames = incubatee.founders.map((founder) => founder.name).join('; ');
     const founderEmails = incubatee.founders.map((founder) => founder.email).join('; ');
     const founderPhones = incubatee.founders.map((founder) => founder.phone).join('; ');
@@ -100,6 +160,14 @@ export function ExportIncubatee({ incubatees, selectedIncubatees, onClose }: Exp
       startupDescription: incubatee.startupDescription,
       googleDriveLink: incubatee.googleDriveLink ?? '',
       notes: incubatee.notes ?? '',
+      assessmentStrategyBusinessModel: averageForArea('strategyBusinessModel'),
+      assessmentProductTechnologyDevelopment: averageForArea('productTechnologyDevelopment'),
+      assessmentFundingFinancials: averageForArea('fundingFinancials'),
+      assessmentLegalCompliance: averageForArea('legalCompliance'),
+      assessmentSoftSkillManagement: averageForArea('softSkillManagement'),
+      assessmentMarketingSales: averageForArea('marketingSales'),
+      assessmentTotalPoints: assessment ? assessment.totalPoints.toString() : '',
+      assessmentOtherCriticalSkills: assessment ? assessment.otherCriticalSkills.filter((item) => item.trim().length > 0).join('; ') : '',
       founderCount: incubatee.founders.length.toString(),
       founderNames,
       founderEmails,

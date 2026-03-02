@@ -144,7 +144,7 @@ export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-gray-900">{founder.name}</p>
-                          <p className="text-sm text-gray-600">{founder.role}</p>
+                          <p className="text-sm text-gray-600">{founder.roles.join(', ')}</p>
                         </div>
                       </div>
                       <div className="space-y-2 pl-15">

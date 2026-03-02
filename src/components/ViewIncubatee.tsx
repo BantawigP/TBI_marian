@@ -1,5 +1,7 @@
-import { X, Lightbulb, Users, FileText, Award, Mail, Phone, Link, StickyNote } from 'lucide-react';
+import { useState } from 'react';
+import { X, Lightbulb, Users, FileText, Award, Mail, Phone, Link, StickyNote, ClipboardList } from 'lucide-react';
 import { Incubatee } from './IncubateeTable';
+import { AssessmentModal } from './AssessmentModal';
 
 interface ViewIncubateeProps {
   incubatee: Incubatee;
@@ -8,6 +10,8 @@ interface ViewIncubateeProps {
 }
 
 export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps) {
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Graduate':
@@ -123,6 +127,25 @@ export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps
               </div>
             )}
 
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <ClipboardList className="w-5 h-5 text-[#FF2B5E]" />
+                <h3 className="font-semibold text-gray-900">Assessment</h3>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 flex items-center justify-between gap-3">
+                <p className="text-sm text-gray-700">
+                  Open and save startup training assessment scores for this incubatee.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAssessmentModal(true)}
+                  className="px-4 py-2 rounded-lg bg-[#FF2B5E] text-white hover:bg-[#E6275A] transition-colors whitespace-nowrap"
+                >
+                  Assessment
+                </button>
+              </div>
+            </div>
+
             {/* Founders */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -133,7 +156,7 @@ export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps
               </div>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <div className="space-y-3">
-                  {incubatee.founders.map((founder, index) => (
+                  {incubatee.founders.map((founder) => (
                     <div
                       key={founder.id}
                       className="p-4 bg-white rounded-lg border border-gray-200"
@@ -183,6 +206,13 @@ export function ViewIncubatee({ incubatee, onClose, onEdit }: ViewIncubateeProps
           </div>
         </div>
       </div>
+
+      <AssessmentModal
+        open={showAssessmentModal}
+        incubateeId={incubatee.id}
+        startupName={incubatee.startupName}
+        onClose={() => setShowAssessmentModal(false)}
+      />
     </div>
   );
 }

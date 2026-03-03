@@ -1,10 +1,12 @@
 import { X, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { Contact, Event } from '../types';
+import type { Incubatee } from './IncubateeTable';
 import { createEvent } from '../lib/eventService';
 
 interface CreateEventProps {
   contacts: Contact[];
+  incubatees: Incubatee[];
   onClose: () => void;
   onSave: (event: Event) => void;
 }
@@ -37,7 +39,7 @@ const PREDEFINED_EVENT_TITLES = [
   'Official Graduation & Certification',
 ];
 
-export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
+export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEventProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -74,10 +76,59 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
 
   const availableContacts = contacts;
 
+  const founderAttendees: Contact[] = incubatees.flatMap((incubatee) =>
+    incubatee.founders.map((founder) => {
+      const matchedContact = availableContacts.find(
+        (contact) => contact.email.toLowerCase() === founder.email.toLowerCase()
+      );
+      const nameParts = founder.name.trim().split(/\s+/).filter(Boolean);
+      const firstName = matchedContact?.firstName ?? nameParts[0] ?? founder.name;
+      const lastName = matchedContact?.lastName ?? nameParts.slice(1).join(' ');
+
+      return {
+        id: `founder-${incubatee.id}-${founder.id}`,
+        alumniId: matchedContact?.alumniId,
+        firstName,
+        lastName,
+        name: founder.name,
+        email: founder.email,
+        contactNumber: founder.phone,
+        college: '',
+        program: '',
+        company: incubatee.startupName,
+        status: matchedContact?.status ?? 'Verified',
+      };
+    })
+  );
+
+  const allAttendees = [...availableContacts, ...founderAttendees];
+  const attendeeMap = new Map(allAttendees.map((attendee) => [attendee.id, attendee]));
+
   const filteredContacts = availableContacts.filter((contact) =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const filteredIncubatees = incubatees
+    .map((incubatee) => {
+      const startupMatch = incubatee.startupName
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+
+      const matchingFounders = startupMatch
+        ? incubatee.founders
+        : incubatee.founders.filter(
+            (founder) =>
+              founder.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              founder.email.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+
+      return {
+        ...incubatee,
+        founders: matchingFounders,
+      };
+    })
+    .filter((incubatee) => incubatee.founders.length > 0);
 
   const renderVerificationBadge = (status: Contact['status']) => {
     const isVerified = status === 'Verified';
@@ -129,7 +180,7 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
   };
 
   const selectAllAttendees = () => {
-    toggleExclusiveSelection(availableContacts.map((contact) => contact.id));
+    toggleExclusiveSelection(allAttendees.map((attendee) => attendee.id));
   };
 
   const selectVerifiedAttendees = () => {
@@ -154,18 +205,30 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
     setError(null);
 
     try {
-      const attendees = availableContacts
-        .filter((c) => selectedAttendees.includes(c.id))
+      const attendees = selectedAttendees
+        .map((id) => attendeeMap.get(id))
+        .filter((attendee): attendee is Contact => Boolean(attendee))
         .map((c) => ({ ...c, rsvpStatus: 'pending' as const }));
 
-      console.log('CreateEvent - Selected attendees:', attendees.map(a => ({ 
+      const uniqueAttendees = Array.from(
+        new Map(
+          attendees.map((attendee) => {
+            const key = attendee.alumniId
+              ? `alumni-${attendee.alumniId}`
+              : `email-${attendee.email.toLowerCase()}`;
+            return [key, attendee] as const;
+          })
+        ).values()
+      );
+
+      console.log('CreateEvent - Selected attendees:', uniqueAttendees.map(a => ({ 
         id: a.id, 
         name: a.name, 
         alumniId: a.alumniId 
       })));
 
       // Call the database function to create the event
-      const createdEvent = await createEvent(formData, attendees);
+      const createdEvent = await createEvent(formData, uniqueAttendees);
       
       console.log('CreateEvent - Received event from createEvent:', {
         id: createdEvent.id,
@@ -329,7 +392,7 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                 {/* Search */}
                 <input
                   type="text"
-                  placeholder="Search contacts..."
+                  placeholder="Search contacts, incubatees, founders..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent mb-4"
@@ -360,53 +423,118 @@ export function CreateEvent({ contacts, onClose, onSave }: CreateEventProps) {
                 </div>
 
                 {/* Attendees List */}
-                <div className="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
-                  {filteredContacts.length > 0 ? (
-                    <div className="space-y-2">
-                      {filteredContacts.map((contact) => (
-                        <label
-                          key={contact.id}
-                          className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-[#FF2B5E] cursor-pointer transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedAttendees.includes(contact.id)}
-                            onChange={() => toggleAttendee(contact.id)}
-                            className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
-                          />
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
-                              {contact.firstName.charAt(0)}
-                              {contact.lastName.charAt(0)}
+                <div className="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto overflow-x-hidden space-y-4">
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      Contacts
+                    </h4>
+                    {filteredContacts.length > 0 ? (
+                      <div className="space-y-2">
+                        {filteredContacts.map((contact) => (
+                          <label
+                            key={contact.id}
+                            className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-[#FF2B5E] cursor-pointer transition-colors min-w-0"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedAttendees.includes(contact.id)}
+                              onChange={() => toggleAttendee(contact.id)}
+                              className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                            />
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
+                                {contact.firstName.charAt(0)}
+                                {contact.lastName.charAt(0)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {contact.name}
+                                </p>
+                                <p className="text-xs text-gray-600 break-all leading-4">
+                                  {contact.email}
+                                </p>
+                              </div>
+                              <div className="shrink-0 self-start">
+                                {renderVerificationBadge(contact.status)}
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {contact.name}
-                              </p>
-                              <p className="text-xs text-gray-600 truncate">
-                                {contact.email}
-                              </p>
-                            </div>
-                            <div className="shrink-0">
-                              {renderVerificationBadge(contact.status)}
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500 text-sm bg-white rounded-lg border border-gray-200">
+                        {availableContacts.length === 0 ? 'No contacts available' : 'No contacts found'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      Incubatees
+                    </h4>
+                    {filteredIncubatees.length > 0 ? (
+                      <div className="space-y-3">
+                        {filteredIncubatees.map((incubatee) => (
+                          <div key={incubatee.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                              {incubatee.startupName}
+                            </p>
+                            <div className="space-y-2">
+                              {incubatee.founders.map((founder) => {
+                                const founderId = `founder-${incubatee.id}-${founder.id}`;
+                                const nameParts = founder.name.trim().split(/\s+/).filter(Boolean);
+                                const firstInitial = nameParts[0]?.charAt(0) ?? '?';
+                                const lastInitial = nameParts[1]?.charAt(0) ?? '';
+
+                                return (
+                                  <label
+                                    key={founderId}
+                                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-[#FF2B5E] cursor-pointer transition-colors min-w-0"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedAttendees.includes(founderId)}
+                                      onChange={() => toggleAttendee(founderId)}
+                                      className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                                    />
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
+                                        {firstInitial}
+                                        {lastInitial}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                          {founder.name}
+                                        </p>
+                                        <p className="text-xs text-gray-600 break-all leading-4">
+                                          {founder.email}
+                                        </p>
+                                      </div>
+                                      <div className="shrink-0 self-start">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap">
+                                          Founder
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
                             </div>
                           </div>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">
-                        {availableContacts.length === 0
-                          ? 'No contacts available'
-                          : 'No contacts found'}
-                      </p>
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500 text-sm bg-white rounded-lg border border-gray-200">
+                        {incubatees.length === 0
+                          ? 'No incubatees available'
+                          : 'No founders found'}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-xs text-gray-500 mt-2">
-                  Verified and unverified contacts can be added to events
+                  Contacts and incubatee founders can be added to events
                 </p>
               </div>
             </div>

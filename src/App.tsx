@@ -14,6 +14,7 @@ import { ViewContact } from './components/ViewContact';
 import { ImportContact } from './components/ImportContact';
 import { ExportContact } from './components/ExportContact';
 import { ExportIncubatee } from './components/ExportIncubatee';
+import { ExportFounder } from './components/ExportFounder';
 import { FormPreview } from './components/FormPreview';
 import { SearchBar } from './components/SearchBar';
 import { Team } from './components/Team';
@@ -520,6 +521,7 @@ export default function App() {
   const [incubateeViewMode, setIncubateeViewMode] = useState<'Startup' | 'founders'>('Startup');
   const [showDeleteIncubateeConfirm, setShowDeleteIncubateeConfirm] = useState(false);
   const [showIncubateeExport, setShowIncubateeExport] = useState(false);
+  const [showFounderExport, setShowFounderExport] = useState(false);
   const [showDeleteFounderConfirm, setShowDeleteFounderConfirm] = useState(false);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
@@ -1472,6 +1474,7 @@ export default function App() {
     setShowAddFounderModal(false);
     setShowDeleteIncubateeConfirm(false);
     setShowIncubateeExport(false);
+    setShowFounderExport(false);
     localStorage.removeItem('auth_method');
   };
 
@@ -2455,6 +2458,14 @@ export default function App() {
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </button>
+                      <button
+                        onClick={() => setShowFounderExport(true)}
+                        disabled={allFounders.length === 0}
+                        className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export
+                      </button>
                     </>
                   )}
 
@@ -2636,6 +2647,7 @@ export default function App() {
       {showCreateEvent && (
         <CreateEvent
           contacts={contacts}
+          incubatees={incubatees}
           onClose={() => setShowCreateEvent(false)}
           onSave={handleCreateEvent}
         />
@@ -2684,6 +2696,15 @@ export default function App() {
           incubatees={incubatees}
           selectedIncubatees={selectedIncubatees}
           onClose={() => setShowIncubateeExport(false)}
+        />
+      )}
+
+      {showFounderExport && (
+        <ExportFounder
+          incubatees={incubatees}
+          unassignedFounders={unassignedFounders}
+          selectedFounders={selectedFounders}
+          onClose={() => setShowFounderExport(false)}
         />
       )}
 

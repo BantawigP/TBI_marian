@@ -27,7 +27,7 @@ import { ViewIncubatee } from './components/ViewIncubatee';
 import { ViewFounder } from './components/ViewFounder';
 import { AddFounderModal } from './components/AddFounderModal';
 import { FoundersTable } from './components/FoundersTable';
-import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb } from 'lucide-react';
+import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb, Building2, Layers3, Tags, Users } from 'lucide-react';
 import type { Contact, ContactStatus, Event, RsvpStatus, AlumniType, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
@@ -523,6 +523,9 @@ export default function App() {
   const [showIncubateeExport, setShowIncubateeExport] = useState(false);
   const [showFounderExport, setShowFounderExport] = useState(false);
   const [showDeleteFounderConfirm, setShowDeleteFounderConfirm] = useState(false);
+  const [startupSortBy, setStartupSortBy] = useState<'cohort' | 'status' | 'alphabetical'>('cohort');
+  const [founderSortBy, setFounderSortBy] = useState<'roles' | 'name' | 'startup'>('name');
+  const [activeSummaryOverlay, setActiveSummaryOverlay] = useState<'cohort' | 'status' | null>(null);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
   // Check if URL contains claim-access token
@@ -1490,6 +1493,87 @@ export default function App() {
 
   const allFounders = [...incubatees.flatMap((inc) => inc.founders), ...unassignedFounders];
 
+  const cohortBuckets = incubatees.reduce((acc, incubatee) => {
+    if (!incubatee.cohortLevel || incubatee.cohortLevel.length === 0) {
+      if (!acc['No Cohort']) {
+        acc['No Cohort'] = [];
+      }
+      acc['No Cohort'].push(incubatee);
+      return acc;
+    }
+
+    incubatee.cohortLevel.forEach((level) => {
+      const key = `Cohort ${level}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(incubatee);
+    });
+
+    return acc;
+  }, {} as Record<string, Incubatee[]>);
+
+  const cohortSummary = [
+    ...new Set([
+      ...cohortLevelOptions.map((option) => `Cohort ${option.level}`),
+      ...Object.keys(cohortBuckets),
+    ]),
+  ]
+    .map((label) => ({
+      label,
+      count: cohortBuckets[label]?.length ?? 0,
+    }))
+    .sort((a, b) => {
+      if (a.label === 'No Cohort') return 1;
+      if (b.label === 'No Cohort') return -1;
+      const aLevel = Number(a.label.replace('Cohort ', ''));
+      const bLevel = Number(b.label.replace('Cohort ', ''));
+      if (Number.isFinite(aLevel) && Number.isFinite(bLevel)) {
+        return aLevel - bLevel;
+      }
+      return a.label.localeCompare(b.label);
+    });
+
+  const statusBuckets = incubatees.reduce((acc, incubatee) => {
+    const key = incubatee.status || 'Unspecified';
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(incubatee);
+    return acc;
+  }, {} as Record<string, Incubatee[]>);
+
+  const statusSummary = [
+    ...new Set([
+      ...statusOptions.map((option) => option.name),
+      ...Object.keys(statusBuckets),
+    ]),
+  ]
+    .map((status) => ({
+      label: status,
+      count: statusBuckets[status]?.length ?? 0,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const sortedIncubatees = [...incubatees].sort((a, b) => {
+    if (startupSortBy === 'alphabetical') {
+      return a.startupName.localeCompare(b.startupName);
+    }
+
+    if (startupSortBy === 'status') {
+      const statusCompare = a.status.localeCompare(b.status);
+      if (statusCompare !== 0) return statusCompare;
+      return a.startupName.localeCompare(b.startupName);
+    }
+
+    const minA = a.cohortLevel.length ? Math.min(...a.cohortLevel) : Number.MAX_SAFE_INTEGER;
+    const minB = b.cohortLevel.length ? Math.min(...b.cohortLevel) : Number.MAX_SAFE_INTEGER;
+    if (minA !== minB) {
+      return minA - minB;
+    }
+    return a.startupName.localeCompare(b.startupName);
+  });
+
   const handleNewIncubatee = () => {
     setEditingIncubatee(null);
     setShowIncubateeForm(true);
@@ -2409,6 +2493,54 @@ export default function App() {
               <div className="mb-8">
                 <h1 className="text-3xl mb-6">Manage Incubatees</h1>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white rounded-xl p-6 border border-gray-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-[#FF2B5E]" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{incubatees.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Total Startups</p>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveSummaryOverlay('cohort')}
+                    className="bg-white rounded-xl p-6 border border-gray-200 text-left hover:border-[#FF2B5E] hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <Layers3 className="w-5 h-5 text-green-600" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{cohortSummary.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Cohort</p>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveSummaryOverlay('status')}
+                    className="bg-white rounded-xl p-6 border border-gray-200 text-left hover:border-[#FF2B5E] hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Tags className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{statusSummary.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Status</p>
+                  </button>
+
+                  <div className="bg-white rounded-xl p-6 border border-gray-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Users className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{allFounders.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Total Founders</p>
+                  </div>
+                </div>
+
                 {/* Action Buttons + View Toggle */}
                 <div className="flex items-center gap-3 mb-6">
                   {incubateeViewMode === 'Startup' ? (
@@ -2473,7 +2605,7 @@ export default function App() {
                   <div className="ml-auto flex items-center gap-0 bg-gray-100 rounded-lg p-1">
                     <button
                       onClick={() => setIncubateeViewMode('Startup')}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      className={`w-28 flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                         incubateeViewMode === 'Startup'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
                           : 'text-gray-600 hover:text-gray-800'
@@ -2484,7 +2616,7 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => setIncubateeViewMode('founders')}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      className={`w-28 flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                         incubateeViewMode === 'founders'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
                           : 'text-gray-600 hover:text-gray-800'
@@ -2494,6 +2626,31 @@ export default function App() {
                       Founders
                     </button>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-6">
+                  <label className="text-sm text-gray-600">Sort by</label>
+                  {incubateeViewMode === 'Startup' ? (
+                    <select
+                      value={startupSortBy}
+                      onChange={(e) => setStartupSortBy(e.target.value as 'cohort' | 'status' | 'alphabetical')}
+                      className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
+                    >
+                      <option value="cohort">Cohort</option>
+                      <option value="status">Status</option>
+                      <option value="alphabetical">Alphabetical order</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={founderSortBy}
+                      onChange={(e) => setFounderSortBy(e.target.value as 'roles' | 'name' | 'startup')}
+                      className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
+                    >
+                      <option value="roles">Roles</option>
+                      <option value="name">Alphabetical order name</option>
+                      <option value="startup">Startup</option>
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -2514,7 +2671,7 @@ export default function App() {
                   </div>
                 ) : (
                   <IncubateeCards
-                    incubatees={incubatees}
+                    incubatees={sortedIncubatees}
                     selectedIncubatees={selectedIncubatees}
                     setSelectedIncubatees={setSelectedIncubatees}
                     onViewIncubatee={handleViewIncubatee}
@@ -2522,8 +2679,9 @@ export default function App() {
                 )
               ) : (
                 <FoundersTable
-                  incubatees={incubatees}
+                  incubatees={sortedIncubatees}
                   unassignedFounders={unassignedFounders}
+                  sortBy={founderSortBy}
                   onViewFounder={(row) => {
                     const inc = incubatees.find((i) =>
                       i.founders.some((f) => f.id === row.founderId)
@@ -2835,6 +2993,51 @@ export default function App() {
                 Confirm
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeSummaryOverlay && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 space-y-4 shadow-xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {activeSummaryOverlay === 'cohort' ? 'Cohort Summary' : 'Status Summary'}
+                </h3>
+                <p className="text-gray-600">
+                  {activeSummaryOverlay === 'cohort'
+                    ? `Total cohort levels: ${cohortSummary.length}`
+                    : `Total statuses: ${statusSummary.length}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSummaryOverlay(null)}
+                className="px-3 py-1.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            {(activeSummaryOverlay === 'cohort' ? cohortSummary : statusSummary).length === 0 ? (
+              <p className="text-sm text-gray-500">
+                {activeSummaryOverlay === 'cohort'
+                  ? 'No cohort data available.'
+                  : 'No status data available.'}
+              </p>
+            ) : (
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {(activeSummaryOverlay === 'cohort' ? cohortSummary : statusSummary).map((item) => (
+                  <div key={item.label} className="px-4 py-3 flex items-center justify-between gap-4">
+                    <p className="font-medium text-gray-900">{item.label}</p>
+                    <p className="text-sm text-gray-600">
+                      {item.count} startup{item.count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

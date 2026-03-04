@@ -31,6 +31,7 @@ interface MergedRow {
 interface FoundersTableProps {
   incubatees: Incubatee[];
   unassignedFounders?: Founder[];
+  sortBy?: 'roles' | 'name' | 'startup';
   onViewFounder?: (founder: FounderRow) => void;
   selectedFounders?: string[];
   onSelectionChange?: (ids: string[]) => void;
@@ -39,6 +40,7 @@ interface FoundersTableProps {
 export function FoundersTable({
   incubatees,
   unassignedFounders = [],
+  sortBy = 'name',
   onViewFounder,
   selectedFounders = [],
   onSelectionChange,
@@ -113,7 +115,36 @@ export function FoundersTable({
     }
   }
 
-  const allIds = mergedRows.flatMap((r) => r.founderIds);
+  const getRolesSortKey = (row: MergedRow) => {
+    const roles = row.associations.flatMap((association) => association.roles);
+    return [...new Set(roles)].sort((a, b) => a.localeCompare(b)).join(', ');
+  };
+
+  const getStartupSortKey = (row: MergedRow) => {
+    const startups = row.associations
+      .map((association) => association.startupName)
+      .filter((startup) => startup && startup !== '—');
+    if (startups.length === 0) return 'zzzz';
+    return [...new Set(startups)].sort((a, b) => a.localeCompare(b)).join(', ');
+  };
+
+  const sortedRows = [...mergedRows].sort((a, b) => {
+    if (sortBy === 'roles') {
+      const rolesCompare = getRolesSortKey(a).localeCompare(getRolesSortKey(b));
+      if (rolesCompare !== 0) return rolesCompare;
+      return a.name.localeCompare(b.name);
+    }
+
+    if (sortBy === 'startup') {
+      const startupCompare = getStartupSortKey(a).localeCompare(getStartupSortKey(b));
+      if (startupCompare !== 0) return startupCompare;
+      return a.name.localeCompare(b.name);
+    }
+
+    return a.name.localeCompare(b.name);
+  });
+
+  const allIds = sortedRows.flatMap((r) => r.founderIds);
   const allSelected = allIds.length > 0 && allIds.every((id) => selectedFounders.includes(id));
   const someSelected = allIds.some((id) => selectedFounders.includes(id)) && !allSelected;
 
@@ -158,7 +189,7 @@ export function FoundersTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {mergedRows.map((row) => {
+            {sortedRows.map((row) => {
               const isRowSelected = row.founderIds.every((id) => selectedFounders.includes(id));
               const isSomeSelected = row.founderIds.some((id) => selectedFounders.includes(id)) && !isRowSelected;
               const isMulti = row.associations.length > 1;
@@ -271,7 +302,7 @@ export function FoundersTable({
                 </tr>
               );
             })}
-            {mergedRows.length === 0 && (
+            {sortedRows.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                   No founders found. Add founders to your incubatees.

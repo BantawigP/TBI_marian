@@ -255,7 +255,7 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
     description: row.description ?? '',
     date: row.event_date ?? row.date ?? '',
     time: row.event_time ?? row.time ?? '',
-    location: locationName || 'TBD',
+    location: locationName || '',
     locationId: row.location_id ?? row.locations?.location_id ?? undefined,
     attendees,
   };

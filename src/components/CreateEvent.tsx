@@ -1,4 +1,4 @@
-import { X, ChevronDown } from 'lucide-react';
+import { X, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { Contact, Event } from '../types';
 import type { Incubatee } from './IncubateeTable';
@@ -47,12 +47,14 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
     time: '',
     location: '',
   });
+  const [isMassEmailOnly, setIsMassEmailOnly] = useState(false);
 
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTitleDropdown, setShowTitleDropdown] = useState(false);
+  const [expandedStartups, setExpandedStartups] = useState<Record<string, boolean>>({});
   const titleDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -170,6 +172,34 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
     );
   };
 
+  const getFounderIdsForStartup = (incubateeId: string, founders: Incubatee['founders']) =>
+    founders.map((founder) => `founder-${incubateeId}-${founder.id}`);
+
+  const toggleStartupFounders = (incubateeId: string, founders: Incubatee['founders']) => {
+    const founderIds = getFounderIdsForStartup(incubateeId, founders);
+
+    setSelectedAttendees((prev) => {
+      const allSelected = founderIds.every((founderId) => prev.includes(founderId));
+
+      if (allSelected) {
+        return prev.filter((id) => !founderIds.includes(id));
+      }
+
+      const existingIds = new Set(prev);
+      const missingFounderIds = founderIds.filter((founderId) => !existingIds.has(founderId));
+      return [...prev, ...missingFounderIds];
+    });
+
+    setExpandedStartups((prev) => ({ ...prev, [incubateeId]: true }));
+  };
+
+  const toggleStartupExpanded = (incubateeId: string) => {
+    setExpandedStartups((prev) => ({
+      ...prev,
+      [incubateeId]: !prev[incubateeId],
+    }));
+  };
+
   const toggleExclusiveSelection = (targetIds: string[]) => {
     const uniqueTargetIds = Array.from(new Set(targetIds));
     const isSameSelection =
@@ -228,7 +258,16 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
       })));
 
       // Call the database function to create the event
-      const createdEvent = await createEvent(formData, uniqueAttendees);
+      const eventPayload = isMassEmailOnly
+        ? {
+            ...formData,
+            date: '',
+            time: '',
+            location: '',
+          }
+        : formData;
+
+      const createdEvent = await createEvent(eventPayload, uniqueAttendees);
       
       console.log('CreateEvent - Received event from createEvent:', {
         id: createdEvent.id,
@@ -279,6 +318,34 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
                 </h3>
 
                 <div className="space-y-4">
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isMassEmailOnly}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setIsMassEmailOnly(checked);
+                          if (checked) {
+                            setFormData((prev) => ({
+                              ...prev,
+                              date: '',
+                              time: '',
+                              location: '',
+                            }));
+                          }
+                        }}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Mass Email Only</p>
+                        <p className="text-xs text-gray-500">
+                          Send a broadcast email without requiring date, time, and location.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
                   <div ref={titleDropdownRef} className="relative">
                     <label className="block text-sm text-[#FF2B5E] mb-2">
                       Event Title
@@ -348,7 +415,7 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
                       value={formData.date}
                       onChange={(e) => handleChange('date', e.target.value)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                      required
+                      required={!isMassEmailOnly}
                     />
                   </div>
 
@@ -361,7 +428,7 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
                       value={formData.time}
                       onChange={(e) => handleChange('time', e.target.value)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                      required
+                      required={!isMassEmailOnly}
                     />
                   </div>
 
@@ -374,7 +441,7 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
                       value={formData.location}
                       onChange={(e) => handleChange('location', e.target.value)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
-                      required
+                      required={!isMassEmailOnly}
                       placeholder="e.g., Grand Ballroom, Marian Hall"
                     />
                   </div>
@@ -476,50 +543,98 @@ export function CreateEvent({ contacts, incubatees, onClose, onSave }: CreateEve
                       <div className="space-y-3">
                         {filteredIncubatees.map((incubatee) => (
                           <div key={incubatee.id} className="bg-white rounded-lg border border-gray-200 p-3">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              {incubatee.startupName}
-                            </p>
-                            <div className="space-y-2">
-                              {incubatee.founders.map((founder) => {
-                                const founderId = `founder-${incubatee.id}-${founder.id}`;
-                                const nameParts = founder.name.trim().split(/\s+/).filter(Boolean);
-                                const firstInitial = nameParts[0]?.charAt(0) ?? '?';
-                                const lastInitial = nameParts[1]?.charAt(0) ?? '';
+                            {(() => {
+                              const founderIds = getFounderIdsForStartup(incubatee.id, incubatee.founders);
+                              const allFoundersSelected =
+                                founderIds.length > 0 &&
+                                founderIds.every((founderId) => selectedAttendees.includes(founderId));
+                              const isExpanded = searchQuery.trim().length > 0 || Boolean(expandedStartups[incubatee.id]);
 
-                                return (
-                                  <label
-                                    key={founderId}
-                                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-[#FF2B5E] cursor-pointer transition-colors min-w-0"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedAttendees.includes(founderId)}
-                                      onChange={() => toggleAttendee(founderId)}
-                                      className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
-                                    />
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
-                                        {firstInitial}
-                                        {lastInitial}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-900 truncate">
-                                          {founder.name}
+                              return (
+                                <>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStartupFounders(incubatee.id, incubatee.founders)}
+                                      className="flex items-center gap-3 flex-1 min-w-0 p-2 rounded-lg border border-gray-200 hover:border-[#FF2B5E] text-left transition-colors"
+                                      title="Select all founders in this startup"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={allFoundersSelected}
+                                        readOnly
+                                        className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E] pointer-events-none"
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">
+                                          {incubatee.startupName}
                                         </p>
-                                        <p className="text-xs text-gray-600 break-all leading-4">
-                                          {founder.email}
+                                        <p className="text-[11px] text-gray-500">
+                                          {incubatee.founders.length} founder{incubatee.founders.length === 1 ? '' : 's'}
                                         </p>
                                       </div>
-                                      <div className="shrink-0 self-start">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap">
-                                          Founder
-                                        </span>
-                                      </div>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStartupExpanded(incubatee.id)}
+                                      className="p-2 rounded-lg border border-gray-200 hover:border-[#FF2B5E] hover:text-[#FF2B5E] transition-colors"
+                                      aria-label={isExpanded ? 'Collapse founders' : 'Expand founders'}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronDown className="w-4 h-4" />
+                                      ) : (
+                                        <ChevronRight className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {isExpanded && (
+                                    <div className="space-y-2">
+                                      {incubatee.founders.map((founder) => {
+                                        const founderId = `founder-${incubatee.id}-${founder.id}`;
+                                        const nameParts = founder.name.trim().split(/\s+/).filter(Boolean);
+                                        const firstInitial = nameParts[0]?.charAt(0) ?? '?';
+                                        const lastInitial = nameParts[1]?.charAt(0) ?? '';
+
+                                        return (
+                                          <label
+                                            key={founderId}
+                                            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-[#FF2B5E] cursor-pointer transition-colors min-w-0"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedAttendees.includes(founderId)}
+                                              onChange={() => toggleAttendee(founderId)}
+                                              className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+                                            />
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-sm">
+                                                {firstInitial}
+                                                {lastInitial}
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-gray-900 truncate">
+                                                  {founder.name}
+                                                </p>
+                                                <p className="text-xs text-gray-600 break-all leading-4">
+                                                  {founder.email}
+                                                </p>
+                                              </div>
+                                              <div className="shrink-0 self-start">
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap">
+                                                  Founder
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </label>
+                                        );
+                                      })}
                                     </div>
-                                  </label>
-                                );
-                              })}
-                            </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         ))}
                       </div>

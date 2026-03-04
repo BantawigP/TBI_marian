@@ -2,6 +2,7 @@ import { X, Plus, Trash2, Edit2, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Incubatee, Founder } from './IncubateeTable';
 import type { CohortLevelOption, StatusOption } from '../lib/incubateeService';
+import { StartupFormsList } from './StartupForms';
 
 interface IncubateeFormProps {
   incubatee?: Incubatee | null;
@@ -291,6 +292,9 @@ export function IncubateeForm({ incubatee, allFounders, cohortLevelOptions, onAd
                   placeholder="Describe the startup..."
                 />
               </div>
+
+              {/* Startup Forms */}
+              <StartupFormsList />
 
               {/* Google Drive Link */}
               <div>

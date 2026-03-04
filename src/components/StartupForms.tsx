@@ -1,5 +1,6 @@
 import { X, FileText, Paperclip, Printer, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 // ──────────────────────────────────────────────
 //  Master list of all 21 startup forms
@@ -40,49 +41,8 @@ export const STARTUP_FORMS: StartupForm[] = [
 export function StartupFormsList() {
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
 
-  return (
+  const modalContent = (
     <>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Startup Forms
-        </label>
-        {/* Scrollable container – shows ~3 rows then scrolls */}
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <div className="max-h-[168px] overflow-y-auto divide-y divide-gray-100">
-            {STARTUP_FORMS.map((form) => (
-              <button
-                key={form.id}
-                type="button"
-                onClick={() => {
-                  if (!form.attachmentOnly) {
-                    setSelectedFormId(form.id);
-                  }
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
-                  form.attachmentOnly
-                    ? 'bg-gray-50 text-gray-500 cursor-default'
-                    : 'hover:bg-[#FF2B5E]/5 text-gray-700 hover:text-[#FF2B5E]'
-                }`}
-              >
-                {form.attachmentOnly ? (
-                  <Paperclip className="w-4 h-4 flex-shrink-0 text-gray-400" />
-                ) : (
-                  <FileText className="w-4 h-4 flex-shrink-0 text-[#FF2B5E]" />
-                )}
-                <span className="flex-1 truncate">{form.name}</span>
-                {form.attachmentOnly ? (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 whitespace-nowrap">
-                    Attachment Only
-                  </span>
-                ) : (
-                  <Eye className="w-4 h-4 flex-shrink-0 text-gray-400" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Form detail modals */}
       {selectedFormId === 1 && (
         <Form1Modal onClose={() => setSelectedFormId(null)} />
@@ -159,6 +119,53 @@ export function StartupFormsList() {
           onClose={() => setSelectedFormId(null)}
         />
       )}
+    </>
+  );
+
+  return (
+    <>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Startup Forms
+        </label>
+        {/* Scrollable container – shows ~3 rows then scrolls */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="max-h-[168px] overflow-y-auto divide-y divide-gray-100">
+            {STARTUP_FORMS.map((form) => (
+              <button
+                key={form.id}
+                type="button"
+                onClick={() => {
+                  if (!form.attachmentOnly) {
+                    setSelectedFormId(form.id);
+                  }
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
+                  form.attachmentOnly
+                    ? 'bg-gray-50 text-gray-500 cursor-default'
+                    : 'hover:bg-[#FF2B5E]/5 text-gray-700 hover:text-[#FF2B5E]'
+                }`}
+              >
+                {form.attachmentOnly ? (
+                  <Paperclip className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                ) : (
+                  <FileText className="w-4 h-4 flex-shrink-0 text-[#FF2B5E]" />
+                )}
+                <span className="flex-1 truncate">{form.name}</span>
+                {form.attachmentOnly ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 whitespace-nowrap">
+                    Attachment Only
+                  </span>
+                ) : (
+                  <Eye className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null}
     </>
   );
 }

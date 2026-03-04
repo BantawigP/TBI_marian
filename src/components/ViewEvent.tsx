@@ -14,10 +14,15 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
   const [showAddAttendees, setShowAddAttendees] = useState(false);
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const isPastEvent = new Date(event.date) < new Date();
+  const parsedEventDate = event.date?.trim() ? new Date(event.date) : null;
+  const isPastEvent = parsedEventDate ? parsedEventDate < new Date() : false;
+  const isMassEmailOnlyEvent =
+    !event.date?.trim() && !event.time?.trim() && !event.location?.trim();
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr?.trim()) return 'Mass Email Only';
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return 'Mass Email Only';
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
@@ -27,8 +32,10 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
   };
 
   const formatTime = (timeStr: string) => {
+    if (!timeStr?.trim()) return 'No set time';
     const [hours, minutes] = timeStr.split(':');
     const hour = parseInt(hours);
+    if (Number.isNaN(hour) || !minutes) return 'No set time';
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
@@ -209,7 +216,7 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Location</p>
-                    <p className="text-sm font-medium">{event.location}</p>
+                    <p className="text-sm font-medium">{event.location?.trim() || 'No set location'}</p>
                   </div>
                 </div>
               </div>
@@ -220,30 +227,32 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <Users className="w-5 h-5 text-[#FF2B5E]" />
-                  Attendees ({event.attendees.length})
+                  {isMassEmailOnlyEvent ? 'Recipients' : 'Attendees'} ({event.attendees.length})
                 </h3>
                 <button
                   onClick={() => setShowAddAttendees(!showAddAttendees)}
                   className="flex items-center gap-2 text-sm bg-[#FF2B5E] text-white px-4 py-2 rounded-lg hover:bg-[#E6275A] transition-colors"
                 >
                   <UserPlus className="w-4 h-4" />
-                  Add Attendees
+                  {isMassEmailOnlyEvent ? 'Add Recipients' : 'Add Attendees'}
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 mb-4">
-                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" /> Will participate</span>
-                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Pending invitation</span>
-                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Will not participate</span>
-                <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-purple-400" /> MARIAN Graduate</span>
-                <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> Graduate</span>
-              </div>
+              {!isMassEmailOnlyEvent && (
+                <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 mb-4">
+                  <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" /> Will participate</span>
+                  <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Pending invitation</span>
+                  <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Will not participate</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-purple-400" /> MARIAN Graduate</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> Graduate</span>
+                </div>
+              )}
 
               {/* Add Attendees Panel */}
               {showAddAttendees && (
                 <div className="mb-6 bg-gray-50 rounded-xl p-4 border border-gray-200">
                   <h4 className="text-sm font-medium text-gray-900 mb-3">
-                    Select Contacts to Add
+                    {isMassEmailOnlyEvent ? 'Select Recipients to Add' : 'Select Contacts to Add'}
                   </h4>
                   <input
                     type="text"
@@ -332,13 +341,13 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                       disabled={selectedAttendees.length === 0}
                       className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Add ({selectedAttendees.length})
+                      {isMassEmailOnlyEvent ? 'Add Recipients' : 'Add'} ({selectedAttendees.length})
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Attendees List */}
+              {/* Recipients / Attendees List */}
               <div className="space-y-3">
                 {event.attendees.length > 0 ? (
                   event.attendees.map((attendee) => (
@@ -360,17 +369,19 @@ export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveE
                             {attendee.email}
                           </p>
                         </div>
-                        <div className="sm:ml-4 flex items-center gap-2">
-                          {renderAlumniTypeBadge(attendee.alumniType)}
-                          {renderStatusBadge(attendee.rsvpStatus)}
-                        </div>
+                        {!isMassEmailOnlyEvent ? (
+                          <div className="sm:ml-4 flex items-center gap-2">
+                            {renderAlumniTypeBadge(attendee.alumniType)}
+                            {renderStatusBadge(attendee.rsvpStatus)}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No attendees yet</p>
+                    <p className="text-sm">{isMassEmailOnlyEvent ? 'No recipients yet' : 'No attendees yet'}</p>
                   </div>
                 )}
               </div>

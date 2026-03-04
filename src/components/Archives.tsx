@@ -70,13 +70,21 @@ export function Archives({
     });
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr?.trim()) return 'Mass Email Only';
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return 'Mass Email Only';
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
   };
+
+  const isMassEmailOnlyEvent = (event: Event) =>
+    !event.date?.trim() && !event.time?.trim() && !event.location?.trim();
+
+  const archivedMassEmailEvents = archivedEvents.filter(isMassEmailOnlyEvent);
+  const archivedScheduledEvents = archivedEvents.filter((event) => !isMassEmailOnlyEvent(event));
 
   const handleRestoreContact = async (contact: Contact) => {
     const confirmed = await openConfirm({
@@ -423,52 +431,111 @@ export function Archives({
       ) : activeTab === 'events' ? (
         <div>
           {archivedEvents.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {archivedEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="bg-white rounded-xl border border-gray-200 p-6"
-                >
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {event.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      {event.description}
-                    </p>
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-[#FF2B5E]" />
-                        {formatDate(event.date)}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-[#FF2B5E]" />
-                        {event.attendees.length} attendee
-                        {event.attendees.length !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  </div>
+            <div className="space-y-8">
+              {archivedScheduledEvents.length > 0 && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Archived Events</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {archivedScheduledEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="bg-white rounded-xl border border-gray-200 p-6"
+                      >
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            {event.title}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-4">
+                            {event.description}
+                          </p>
+                          <div className="space-y-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-[#FF2B5E]" />
+                              {formatDate(event.date)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-[#FF2B5E]" />
+                              {event.attendees.length} attendee
+                              {event.attendees.length !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        </div>
 
-                  <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={() => handleRestoreEvent(event)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Restore
-                    </button>
-                    <button
-                      onClick={() =>
-                        handlePermanentDeleteEvent(event.id, event.title)
-                      }
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </button>
+                        <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
+                          <button
+                            onClick={() => handleRestoreEvent(event)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Restore
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePermanentDeleteEvent(event.id, event.title)
+                            }
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {archivedMassEmailEvents.length > 0 && (
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Archived Mass Email Only</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {archivedMassEmailEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="bg-white rounded-xl border border-gray-200 p-6"
+                      >
+                        <div className="mb-4">
+                          <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-gray-100 text-gray-700 border-gray-200 mb-2">
+                            Mass Email
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            {event.title}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-4">
+                            {event.description}
+                          </p>
+                          <div className="space-y-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-[#FF2B5E]" />
+                              {event.attendees.length} recipient
+                              {event.attendees.length !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
+                          <button
+                            onClick={() => handleRestoreEvent(event)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Restore
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePermanentDeleteEvent(event.id, event.title)
+                            }
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">

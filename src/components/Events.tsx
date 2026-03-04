@@ -14,13 +14,34 @@ interface EventsProps {
 export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEditEvent }: EventsProps) {
   const [view, setView] = useState<'list' | 'calendar'>('list');
 
+  const isMassEmailOnlyEvent = (event: Event) =>
+    !event.date?.trim() && !event.time?.trim() && !event.location?.trim();
+
+  const parseEventDate = (dateStr: string) => {
+    if (!dateStr?.trim()) return null;
+    const parsed = new Date(dateStr);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const massEmailOnlyEvents = events.filter(isMassEmailOnlyEvent);
+
   const upcomingEvents = events.filter(
-    (event) => new Date(event.date) >= new Date()
+    (event) => {
+      if (isMassEmailOnlyEvent(event)) return false;
+      const parsedDate = parseEventDate(event.date);
+      return parsedDate ? parsedDate >= new Date() : true;
+    }
   );
-  const pastEvents = events.filter((event) => new Date(event.date) < new Date());
+  const pastEvents = events.filter((event) => {
+    if (isMassEmailOnlyEvent(event)) return false;
+    const parsedDate = parseEventDate(event.date);
+    return parsedDate ? parsedDate < new Date() : false;
+  });
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr?.trim()) return 'Mass Email Only';
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return 'Mass Email Only';
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -29,8 +50,10 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEd
   };
 
   const formatTime = (timeStr: string) => {
+    if (!timeStr?.trim()) return 'No set time';
     const [hours, minutes] = timeStr.split(':');
     const hour = parseInt(hours);
+    if (Number.isNaN(hour) || !minutes) return 'No set time';
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
@@ -185,7 +208,7 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEd
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <MapPin className="w-4 h-4 text-[#FF2B5E]" />
-                      {event.location}
+                      {event.location?.trim() || 'No set location'}
                     </div>
                   </div>
 
@@ -196,6 +219,100 @@ export function Events({ events, onCreateEvent, onViewEvent, onDeleteEvent, onEd
                         <Users className="w-4 h-4 text-gray-600" />
                         <span className="text-sm font-medium text-gray-700">
                           {event.attendees.length} Attendee
+                          {event.attendees.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => onViewEvent(event)}
+                        className="text-sm text-[#FF2B5E] hover:text-[#E6275A] flex items-center gap-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    </div>
+
+                    {event.attendees.length > 0 && (
+                      <div className="flex -space-x-2">
+                        {event.attendees.slice(0, 5).map((attendee) => (
+                          <div
+                            key={attendee.id}
+                            className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-xs border-2 border-white"
+                            title={attendee.name}
+                          >
+                            {attendee.firstName.charAt(0)}
+                            {attendee.lastName.charAt(0)}
+                          </div>
+                        ))}
+                        {event.attendees.length > 5 && (
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs border-2 border-white">
+                            +{event.attendees.length - 5}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Past Events */}
+      {massEmailOnlyEvents.length > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Mass Email Only
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {massEmailOnlyEvents.map((event) => (
+              <div
+                key={event.id}
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-gray-100 text-gray-700 border-gray-200 mb-2">
+                        Mass Email
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {event.title}
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        {event.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3">
+                      {onEditEvent && (
+                        <button
+                          type="button"
+                          onClick={() => onEditEvent(event)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit event"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
+                      {onDeleteEvent && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteEvent(event.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete event"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-700">
+                          {event.attendees.length} Recipient
                           {event.attendees.length !== 1 ? 's' : ''}
                         </span>
                       </div>

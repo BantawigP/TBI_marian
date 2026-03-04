@@ -4,6 +4,11 @@ import { supabase } from './supabaseClient';
 export const sendEventInvites = async (event: Event, attendees: Contact[]) => {
   if (!attendees.length) return { skipped: true } as const;
 
+  const isMassEmailOnly =
+    !event.date?.trim() &&
+    !event.time?.trim() &&
+    !event.location?.trim();
+
   const payload = {
     event: {
       id: event.id,
@@ -23,7 +28,9 @@ export const sendEventInvites = async (event: Event, attendees: Contact[]) => {
     })),
   };
 
-  const { data, error } = await supabase.functions.invoke('send-event-invite', {
+  const functionName = isMassEmailOnly ? 'send-mass-email' : 'send-event-invite';
+
+  const { data, error } = await supabase.functions.invoke(functionName, {
     body: payload,
   });
 

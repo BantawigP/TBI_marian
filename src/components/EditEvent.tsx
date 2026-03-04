@@ -161,7 +161,6 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
-                required
               />
             </div>
             <div>
@@ -174,7 +173,6 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
-                required
               />
             </div>
           </div>
@@ -191,7 +189,6 @@ export function EditEvent({ event, contacts, onClose, onSave }: EditEventProps) 
               onChange={(e) => setLocation(e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
               placeholder="Enter event location"
-              required
             />
           </div>
 

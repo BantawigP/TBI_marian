@@ -36,8 +36,14 @@ export function EventCalendar({ events, onViewEvent }: EventCalendarProps) {
   const downloadCalendar = () => {
     if (events.length === 0) return;
 
+    const scheduledEvents = events.filter(
+      (event) => event.date?.trim() && event.time?.trim()
+    );
+
+    if (scheduledEvents.length === 0) return;
+
     const nowStamp = formatUtcDateTime(new Date());
-    const sortedEvents = [...events].sort((first, second) => {
+    const sortedEvents = [...scheduledEvents].sort((first, second) => {
       const firstDate = createEventDateTime(first.date, first.time).getTime();
       const secondDate = createEventDateTime(second.date, second.time).getTime();
       return firstDate - secondDate;

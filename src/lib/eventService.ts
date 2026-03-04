@@ -6,6 +6,12 @@ const numberOrNull = (value: string | number | undefined | null) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+const normalizeOptionalText = (value?: string | null) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
 
 const ensureIdByName = async (
   table: string,
@@ -71,8 +77,12 @@ export async function createEvent(
   attendees: Contact[]
 ): Promise<Event> {
   try {
+    const normalizedDate = normalizeOptionalText(eventData.date);
+    const normalizedTime = normalizeOptionalText(eventData.time);
+    const normalizedLocation = normalizeOptionalText(eventData.location);
+
     // Get or create location ID
-    const locationId = await ensureIdByName('locations', 'name', 'location_id', eventData.location);
+    const locationId = await ensureIdByName('locations', 'name', 'location_id', normalizedLocation);
 
     // Insert event into the events table
     const { data: event, error: eventError } = await supabase
@@ -80,8 +90,8 @@ export async function createEvent(
       .insert({
         title: eventData.title,
         description: eventData.description,
-        event_date: eventData.date,
-        event_time: eventData.time,
+        event_date: normalizedDate,
+        event_time: normalizedTime,
         location_id: locationId,
       })
       .select('event_id,title,description,event_date,event_time,location_id,locations(location_id,name,city,country)')
@@ -119,7 +129,7 @@ export async function createEvent(
     }
 
     // Return the event with attendees
-    let locationName = eventData.location;
+    let locationName = normalizedLocation ?? '';
     
     if (event.locations) {
       if (Array.isArray(event.locations) && event.locations.length > 0) {
@@ -133,8 +143,8 @@ export async function createEvent(
       id: event.event_id.toString(),
       title: event.title,
       description: event.description,
-      date: event.event_date,
-      time: event.event_time,
+      date: event.event_date ?? '',
+      time: event.event_time ?? '',
       location: locationName,
       locationId: event.location_id,
       attendees,
@@ -166,8 +176,12 @@ export async function updateEvent(
   attendees: Contact[]
 ): Promise<Event> {
   try {
+    const normalizedDate = normalizeOptionalText(eventData.date);
+    const normalizedTime = normalizeOptionalText(eventData.time);
+    const normalizedLocation = normalizeOptionalText(eventData.location);
+
     // Get or create location ID
-    const locationId = await ensureIdByName('locations', 'name', 'location_id', eventData.location);
+    const locationId = await ensureIdByName('locations', 'name', 'location_id', normalizedLocation);
 
     // Update event in the events table
     const { data: event, error: eventError } = await supabase
@@ -175,8 +189,8 @@ export async function updateEvent(
       .update({
         title: eventData.title,
         description: eventData.description,
-        event_date: eventData.date,
-        event_time: eventData.time,
+        event_date: normalizedDate,
+        event_time: normalizedTime,
         location_id: locationId,
       })
       .eq('event_id', parseInt(eventId))
@@ -221,7 +235,7 @@ export async function updateEvent(
     }
 
     // Return the updated event with attendees
-    let locationName = eventData.location;
+    let locationName = normalizedLocation ?? '';
     
     if (event.locations) {
       if (Array.isArray(event.locations) && event.locations.length > 0) {
@@ -235,8 +249,8 @@ export async function updateEvent(
       id: event.event_id.toString(),
       title: event.title,
       description: event.description,
-      date: event.event_date,
-      time: event.event_time,
+      date: event.event_date ?? '',
+      time: event.event_time ?? '',
       location: locationName,
       locationId: event.location_id,
       attendees,

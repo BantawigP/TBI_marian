@@ -9,9 +9,9 @@ type EventPayload = {
   id: string;
   title: string;
   description?: string;
-  date: string;
-  time: string;
-  location: string;
+  date?: string;
+  time?: string;
+  location?: string;
 };
 
 type AttendeePayload = {
@@ -60,8 +60,10 @@ const hashToken = async (token: string) => {
   return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
-const formatDate = (dateStr: string, timeStr: string) => {
+const formatDate = (dateStr?: string, timeStr?: string) => {
+  if (!dateStr || !timeStr) return null;
   const date = new Date(`${dateStr}T${timeStr}`);
+  if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleString("en-US", {
     weekday: "short",
     month: "short",
@@ -79,6 +81,8 @@ const renderEmailHtml = (
 ) => {
   const displayName = attendee.firstName || attendee.name || "there";
   const formattedDate = formatDate(event.date, event.time);
+  const locationLabel = event.location?.trim() || "To be announced";
+  const scheduleLabel = formattedDate || "To be announced";
   return `
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f9fafb;padding:32px 0;font-family:Arial,Helvetica,sans-serif;">
     <tr>
@@ -94,13 +98,13 @@ const renderEmailHtml = (
                 <tr>
                   <td style="padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;background:#f9fafb;">
                     <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;">Date & Time</p>
-                    <p style="margin:0;font-size:15px;color:#111827;font-weight:600;">${formattedDate}</p>
+                    <p style="margin:0;font-size:15px;color:#111827;font-weight:600;">${scheduleLabel}</p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;background:#f9fafb;margin-top:10px;">
                     <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;">Location</p>
-                    <p style="margin:0;font-size:15px;color:#111827;font-weight:600;">${event.location}</p>
+                    <p style="margin:0;font-size:15px;color:#111827;font-weight:600;">${locationLabel}</p>
                   </td>
                 </tr>
               </table>
@@ -221,7 +225,9 @@ serve(async (req) => {
 
         const attendee = payload.attendees.find((a) => a.email === email)!;
         const html = renderEmailHtml(payload.event, attendee, { yesUrl, maybeUrl, noUrl });
-        const text = `You're invited to ${payload.event.title}\n${formatDate(payload.event.date, payload.event.time)}\n${payload.event.location}\nYes: ${yesUrl}\nMaybe: ${maybeUrl}\nNo: ${noUrl}`;
+        const textDate = formatDate(payload.event.date, payload.event.time) ?? "To be announced";
+        const textLocation = payload.event.location?.trim() || "To be announced";
+        const text = `You're invited to ${payload.event.title}\n${textDate}\n${textLocation}\nYes: ${yesUrl}\nMaybe: ${maybeUrl}\nNo: ${noUrl}`;
 
         const resendRes = await fetch("https://api.resend.com/emails", {
           method: "POST",

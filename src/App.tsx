@@ -27,7 +27,7 @@ import { ViewIncubatee } from './components/ViewIncubatee';
 import { ViewFounder } from './components/ViewFounder';
 import { AddFounderModal } from './components/AddFounderModal';
 import { FoundersTable } from './components/FoundersTable';
-import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb, Building2, Layers3, Tags, Users } from 'lucide-react';
+import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb, Building2, Layers3, Tags, Users, Search } from 'lucide-react';
 import type { Contact, ContactStatus, Event, RsvpStatus, AlumniType, TeamMember, TeamRole } from './types';
 import { sendVerificationEmail } from './components/email/sendVerificationEmail';
 import { supabase } from './lib/supabaseClient';
@@ -525,6 +525,7 @@ export default function App() {
   const [showDeleteFounderConfirm, setShowDeleteFounderConfirm] = useState(false);
   const [startupSortBy, setStartupSortBy] = useState<'cohort' | 'status' | 'alphabetical'>('cohort');
   const [founderSortBy, setFounderSortBy] = useState<'roles' | 'name' | 'startup'>('name');
+  const [incubateeSearchQuery, setIncubateeSearchQuery] = useState('');
   const [activeSummaryOverlay, setActiveSummaryOverlay] = useState<'cohort' | 'status' | null>(null);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
@@ -1572,6 +1573,20 @@ export default function App() {
       return minA - minB;
     }
     return a.startupName.localeCompare(b.startupName);
+  });
+
+  const normalizedIncubateeSearchQuery = incubateeSearchQuery.trim().toLowerCase();
+  const filteredStartupIncubatees = sortedIncubatees.filter((incubatee) => {
+    if (!normalizedIncubateeSearchQuery) return true;
+
+    const startupMatch = incubatee.startupName
+      .toLowerCase()
+      .includes(normalizedIncubateeSearchQuery);
+    const founderMatch = incubatee.founders.some((founder) =>
+      founder.name.toLowerCase().includes(normalizedIncubateeSearchQuery)
+    );
+
+    return startupMatch || founderMatch;
   });
 
   const handleNewIncubatee = () => {
@@ -2651,6 +2666,16 @@ export default function App() {
                       <option value="startup">Startup</option>
                     </select>
                   )}
+                  <div className="relative min-w-[240px]">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={incubateeSearchQuery}
+                      onChange={(e) => setIncubateeSearchQuery(e.target.value)}
+                      placeholder={incubateeViewMode === 'Startup' ? 'Search startup' : 'Search founder'}
+                      className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2669,9 +2694,14 @@ export default function App() {
                       Add Incubatee
                     </button>
                   </div>
+                ) : filteredStartupIncubatees.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No matching startups found</h3>
+                    <p className="text-gray-500">Try a different startup or founder name.</p>
+                  </div>
                 ) : (
                   <IncubateeCards
-                    incubatees={sortedIncubatees}
+                    incubatees={filteredStartupIncubatees}
                     selectedIncubatees={selectedIncubatees}
                     setSelectedIncubatees={setSelectedIncubatees}
                     onViewIncubatee={handleViewIncubatee}
@@ -2682,6 +2712,7 @@ export default function App() {
                   incubatees={sortedIncubatees}
                   unassignedFounders={unassignedFounders}
                   sortBy={founderSortBy}
+                  searchQuery={incubateeSearchQuery}
                   onViewFounder={(row) => {
                     const inc = incubatees.find((i) =>
                       i.founders.some((f) => f.id === row.founderId)

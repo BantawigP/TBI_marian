@@ -32,6 +32,7 @@ interface FoundersTableProps {
   incubatees: Incubatee[];
   unassignedFounders?: Founder[];
   sortBy?: 'roles' | 'name' | 'startup';
+  searchQuery?: string;
   onViewFounder?: (founder: FounderRow) => void;
   selectedFounders?: string[];
   onSelectionChange?: (ids: string[]) => void;
@@ -41,6 +42,7 @@ export function FoundersTable({
   incubatees,
   unassignedFounders = [],
   sortBy = 'name',
+  searchQuery = '',
   onViewFounder,
   selectedFounders = [],
   onSelectionChange,
@@ -144,7 +146,19 @@ export function FoundersTable({
     return a.name.localeCompare(b.name);
   });
 
-  const allIds = sortedRows.flatMap((r) => r.founderIds);
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredRows = sortedRows.filter((row) => {
+    if (!normalizedSearchQuery) return true;
+
+    const founderMatch = row.name.toLowerCase().includes(normalizedSearchQuery);
+    const startupMatch = row.associations.some((association) =>
+      association.startupName.toLowerCase().includes(normalizedSearchQuery)
+    );
+
+    return founderMatch || startupMatch;
+  });
+
+  const allIds = filteredRows.flatMap((r) => r.founderIds);
   const allSelected = allIds.length > 0 && allIds.every((id) => selectedFounders.includes(id));
   const someSelected = allIds.some((id) => selectedFounders.includes(id)) && !allSelected;
 
@@ -189,7 +203,7 @@ export function FoundersTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {sortedRows.map((row) => {
+            {filteredRows.map((row) => {
               const isRowSelected = row.founderIds.every((id) => selectedFounders.includes(id));
               const isSomeSelected = row.founderIds.some((id) => selectedFounders.includes(id)) && !isRowSelected;
               const isMulti = row.associations.length > 1;
@@ -302,7 +316,7 @@ export function FoundersTable({
                 </tr>
               );
             })}
-            {sortedRows.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                   No founders found. Add founders to your incubatees.

@@ -37,7 +37,20 @@ const BATCH_DELAY_MS = 1800;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const normalizeLineBreaks = (value: string) => value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+
 const renderEmailHtml = (event: EventPayload) => {
+  const safeTitle = escapeHtml(event.title);
+  const safeDescription = event.description ? escapeHtml(normalizeLineBreaks(event.description)) : "";
+
   return `
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f9fafb;padding:32px 0;font-family:Arial,Helvetica,sans-serif;">
   <tr>
@@ -49,7 +62,7 @@ const renderEmailHtml = (event: EventPayload) => {
               <tr>
                 <td style="padding:28px 28px 24px 28px;">
                   <p style="margin:0 0 4px 0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">MARIAN TBI Connect</p>
-                  <h1 style="margin:0;font-size:22px;color:#ffffff;font-weight:700;">${event.title}</h1>
+                  <h1 style="margin:0;font-size:22px;color:#ffffff;font-weight:700;">${safeTitle}</h1>
                 </td>
               </tr>
             </table>
@@ -57,7 +70,7 @@ const renderEmailHtml = (event: EventPayload) => {
         </tr>
         <tr>
           <td style="padding:28px;">
-            ${event.description ? `<p style="margin:0 0 24px 0;font-size:14px;color:#374151;line-height:1.6;">${event.description}</p>` : ""}
+            ${safeDescription ? `<p style="margin:0 0 24px 0;font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap;">${safeDescription}</p>` : ""}
 
             <p style="margin:0;font-size:13px;color:#9ca3af;">Best regards,<br /><strong style="color:#374151;">MARIAN TBI Connect Team</strong></p>
           </td>
@@ -78,7 +91,7 @@ const renderEmailHtml = (event: EventPayload) => {
 };
 
 const renderEmailText = (event: EventPayload) => {
-  const eventDescription = event.description?.trim();
+  const eventDescription = event.description ? normalizeLineBreaks(event.description) : "";
 
   return `
 MARIAN TBI Connect

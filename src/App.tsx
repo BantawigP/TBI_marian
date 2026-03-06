@@ -1,45 +1,51 @@
-import { useEffect, useRef, useState } from 'react';
-import { Login } from './components/Login';
-import { ClaimAccess } from './components/ClaimAccess';
-import { Sidebar } from './components/Sidebar';
-import { Home } from './components/Home';
-import { Events } from './components/Events';
-import { Archives } from './components/Archives';
-import { CreateEvent } from './components/CreateEvent';
-import { EditEvent } from './components/EditEvent';
-import { ViewEvent } from './components/ViewEvent';
-import { ContactsTable } from './components/ContactsTable';
-import { ContactForm } from './components/ContactForm';
-import { ViewContact } from './components/ViewContact';
-import { ImportContact } from './components/ImportContact';
-import { ExportContact } from './components/ExportContact';
-import { ExportIncubatee } from './components/ExportIncubatee';
-import { ExportFounder } from './components/ExportFounder';
-import { FormPreview } from './components/FormPreview';
-import { SearchBar } from './components/SearchBar';
-import { Team } from './components/Team';
-import { PopupDialog } from './components/PopupDialog';
-import { PersonalSettings } from './components/PersonalSettings';
-import { Incubatee, Founder } from './components/IncubateeTable';
-import { IncubateeCards } from './components/IncubateeCards';
-import { IncubateeForm } from './components/IncubateeForm';
-import { ViewIncubatee } from './components/ViewIncubatee';
-import { ViewFounder } from './components/ViewFounder';
-import { AddFounderModal } from './components/AddFounderModal';
-import { FoundersTable } from './components/FoundersTable';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Login, ClaimAccess, PersonalSettings, sendVerificationEmail } from './features/auth';
+import { Sidebar, PopupDialog, FormPreview } from './features/shared';
+import { Home } from './features/home';
+import { Events } from './features/events/components/Events';
+import { Archives } from './features/archives';
+import { CreateEvent } from './features/events/components/CreateEvent';
+import { EditEvent } from './features/events/components/EditEvent';
+import { ViewEvent } from './features/events/components/ViewEvent';
+import { ContactsTable } from './features/contacts/components/ContactsTable';
+import { ContactForm } from './features/contacts/components/ContactForm';
+import { ViewContact } from './features/contacts/components/ViewContact';
+import { ImportContact } from './features/contacts/components/ImportContact';
+import { ExportContact } from './features/contacts/components/ExportContact';
+import { ExportIncubatee, ExportFounder, Incubatee, Founder, IncubateeCards, IncubateeForm, ViewIncubatee, ViewFounder, AddFounderModal, FoundersTable } from './features/incubatees';
+import { SearchBar } from './features/contacts/components/SearchBar';
+import { Team } from './features/team/components/Team';
 import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb, Building2, Layers3, Tags, Users, Search } from 'lucide-react';
-import type { Contact, ContactStatus, Event, RsvpStatus, AlumniType, TeamMember, TeamRole } from './types';
-import { sendVerificationEmail } from './components/email/sendVerificationEmail';
+import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember, TeamRole } from './types';
 import { supabase } from './lib/supabaseClient';
-import { sendEventInvites } from './lib/eventInviteService';
-import { updateEvent, deleteEventPermanently } from './lib/eventService';
+import { sendEventInvites } from './features/events/services/eventInviteService';
+import { deleteEventPermanently } from './features/events/services/eventService';
 import {
   fetchArchivedTeamMembers,
-  restoreTeamMember,
-  deleteTeamMemberPermanently,
-} from './lib/teamService';
-import { linkMyAccountToTeam } from './lib/linkAccountService';
-import { setCachedSession, clearCachedSession } from './lib/sessionCache';
+} from './features/team/services/teamService';
+import { useAuthSessionSync } from './features/auth/hooks/useAuthSessionSync';
+import { useAuthActions } from './features/auth/hooks/useAuthActions';
+import { useAuthUiActions } from './features/auth/hooks/useAuthUiActions';
+import { MemberRouteGuard } from './features/team/components/MemberRouteGuard';
+import { useTeamArchiveActions } from './features/team/hooks/useTeamArchiveActions';
+import { useArchiveActions } from './features/archives/hooks/useArchiveActions';
+import { useEventActions } from './features/events/hooks/useEventActions';
+import { useEventArchiveActions } from './features/events/hooks/useEventArchiveActions';
+import { useContactFormActions } from './features/contacts/hooks/useContactFormActions';
+import { useContactListActions } from './features/contacts/hooks/useContactListActions';
+import { useContactStatusActions } from './features/contacts/hooks/useContactStatusActions';
+import { useContactArchiveActions } from './features/contacts/hooks/useContactArchiveActions';
+import { useFilteredContacts } from './features/contacts/hooks/useFilteredContacts';
+import { useContactUiStateActions } from './features/contacts/hooks/useContactUiStateActions';
+import { useContactModalActions } from './features/contacts/hooks/useContactModalActions';
+import { useEventModalActions } from './features/events/hooks/useEventModalActions';
+import { useIncubateeArchiveActions } from './features/incubatees/hooks/useIncubateeArchiveActions';
+import { useFounderArchiveActions } from './features/incubatees/hooks/useFounderArchiveActions';
+import { useIncubateeModalActions } from './features/incubatees/hooks/useIncubateeModalActions';
+import { useIncubateeConfirmActions } from './features/incubatees/hooks/useIncubateeConfirmActions';
+import { useIncubateeUiActions } from './features/incubatees/hooks/useIncubateeUiActions';
+import { useFounderTableActions } from './features/incubatees/hooks/useFounderTableActions';
+import { resolveCurrentUserRoleContext } from './features/team/services/currentUserRoleService';
 import {
   fetchIncubatees as fetchIncubateesFromSupabase,
   fetchUnassignedFounders as fetchUnassignedFoundersFromSupabase,
@@ -57,12 +63,13 @@ import {
   deleteFounders as deleteFoundersFromSupabase,
   unassignFounders as unassignFoundersInDb,
   linkFounderToIncubatee as linkFounderToIncubateeInDb,
-} from './lib/incubateeService';
-import type { CohortLevelOption, StatusOption } from './lib/incubateeService';
+} from './features/incubatees/services/incubateeService';
+import type { CohortLevelOption, StatusOption } from './features/incubatees/services/incubateeService';
+import { mapEventRowToEvent } from './features/events/mappers/eventMappers';
+import { mapContactRowToContact } from './features/contacts/mappers/contactMappers';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
-const defaultStatus: ContactStatus = 'Verified';
 
 const numberOrNull = (value: string | number | undefined | null) => {
   const parsed = Number(value);
@@ -165,102 +172,6 @@ const ensureEmailId = async (email?: string, status?: ContactStatus): Promise<nu
   return inserted?.email_id ?? null;
 };
 
-const mapContactRowToContact = (row: Record<string, any>): Contact => {
-  const firstName = row.f_name ?? row.F_name ?? row.first_name ?? row.firstName ?? '';
-  const lastName = row.l_name ?? row.L_name ?? row.last_name ?? row.lastName ?? '';
-
-  const collegeId = numberOrNull(row.college_id ?? row.colleges?.college_id ?? null);
-  const programId = numberOrNull(row.program_id ?? row.programs?.program_id ?? null);
-  const companyId = numberOrNull(row.company_id ?? row.companies?.company_id ?? null);
-  const occupationId = numberOrNull(row.occupation_id ?? row.occupations?.occupation_id ?? null);
-  const alumniAddressId = numberOrNull(
-    row.alumniaddress_id ?? row.alumni_addresses?.alumniaddress_id ?? null
-  );
-  const locationId = numberOrNull(
-    row.location_id ??
-      row.locations?.location_id ??
-      row.alumni_addresses?.location_id ??
-      row.alumni_addresses?.locations?.location_id ??
-      null
-  );
-
-  return {
-    id: (row.alumni_id ?? row.id ?? row.uuid)?.toString() || Date.now().toString(),
-    alumniId: numberOrNull(row.alumni_id) || undefined,
-    firstName,
-    lastName,
-    name: row.full_name ?? row.name ?? `${firstName} ${lastName}`.trim(),
-    college: row.college ?? row.college_name ?? row.colleges?.college_name ?? '',
-    program: row.program ?? row.program_name ?? row.programs?.program_name ?? '',
-    email: row.email_address?.email ?? '',
-    status: (
-      row.email_address?.status === true ? 'Verified' :
-      row.email_address?.status === false ? 'Unverified' :
-      row.status === true ? 'Verified' :
-      row.status === false ? 'Unverified' :
-      defaultStatus
-    ) as ContactStatus,
-    contactNumber: row.contact_number
-      ? row.contact_number.toString()
-      : row.contactNumber ?? '',
-    dateGraduated: row.date_graduated ?? row.year_graduated ?? '',
-    occupation:
-      row.occupation ?? row.occupation_title ?? row.occupations?.occupation_title ?? '',
-    company: row.company ?? row.company_name ?? row.companies?.company_name ?? '',
-    address:
-      row.address ??
-      row.location ??
-      row.locations?.name ??
-      row.alumni_addresses?.locations?.name ??
-      '',
-    collegeId: collegeId ?? undefined,
-    programId: programId ?? undefined,
-    companyId: companyId ?? undefined,
-    occupationId: occupationId ?? undefined,
-    locationId: locationId ?? undefined,
-    alumniAddressId: alumniAddressId ?? undefined,
-    alumniType: (() => {
-      const typeName = row.alumni_types?.name ?? null;
-      if (typeName === 'Graduate') return 'graduate' as AlumniType;
-      if (typeName === 'Marian Graduate') return 'marian_graduate' as AlumniType;
-      // Fallback: id-based mapping when alumni_types join is unavailable
-      const typeId = row.alumni_type_id;
-      if (typeId === 1) return 'graduate' as AlumniType;
-      if (typeId === 2) return 'marian_graduate' as AlumniType;
-      return undefined;
-    })(),
-  };
-};
-
-const mapEventRowToEvent = (row: Record<string, any>): Event => {
-  const attendees = (row.event_participants ?? [])
-    .map((participant: any) => {
-      const alumni = participant.alumni ?? participant.alumni_id ?? participant.alumniRow;
-      const rsvpStatus = (participant.rsvp_status || participant.rsvpStatus || 'pending') as RsvpStatus;
-      return alumni ? { ...mapContactRowToContact(alumni), rsvpStatus } : null;
-    })
-    .filter(Boolean) as Contact[];
-
-  const locationName =
-    row.locations?.name ??
-    row.location_name ??
-    row.location ??
-    (row.locations?.city
-      ? `${row.locations.city}${row.locations.country ? `, ${row.locations.country}` : ''}`
-      : '');
-
-  return {
-    id: (row.event_id ?? row.id)?.toString() ?? Date.now().toString(),
-    title: row.title ?? '',
-    description: row.description ?? '',
-    date: row.event_date ?? row.date ?? '',
-    time: row.event_time ?? row.time ?? '',
-    location: locationName || '',
-    locationId: row.location_id ?? row.locations?.location_id ?? undefined,
-    attendees,
-  };
-};
-
 const CONTACT_SELECT_BASE_FULL =
   'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,alumni_type_id,alumni_types(id,name),college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
 const CONTACT_SELECT_BASE_NO_TYPES =
@@ -289,26 +200,6 @@ const noteMissingEventRsvpStatus = () => {
   if (loggedMissingEventRsvpStatus) return;
   loggedMissingEventRsvpStatus = true;
   console.warn('Supabase: event_participants.rsvp_status column missing, continuing without RSVP status.');
-};
-
-const deriveUserProfile = (user?: any) => {
-  if (!user) {
-    return { name: '', email: '' };
-  }
-
-  const metadata = user.user_metadata || {};
-  const identityData = user.identities?.[0]?.identity_data || {};
-  const email =
-    user.email || metadata.email || metadata.preferred_email || identityData.email || '';
-  const name =
-    metadata.full_name ||
-    metadata.name ||
-    [metadata.given_name, metadata.family_name].filter(Boolean).join(' ') ||
-    identityData.name ||
-    email ||
-    '';
-
-  return { name, email };
 };
 
 const baseContactSelect = () =>
@@ -529,303 +420,74 @@ export default function App() {
   const [activeSummaryOverlay, setActiveSummaryOverlay] = useState<'cohort' | 'status' | null>(null);
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
-  // Check if URL contains claim-access token
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('token')) {
-      setShowClaimAccess(true);
-    }
-  }, []);
+  useAuthSessionSync({
+    setShowClaimAccess,
+    setIsLoggedIn,
+    setCurrentUserName,
+    setCurrentUserEmail,
+    setSyncError,
+    cachedSessionRef,
+  });
 
-  // Keep UI auth state in sync with Supabase session (Google OAuth, etc.)
-  useEffect(() => {
-    let isMounted = true;
+  const { handleLogin, handleLogout } = useAuthActions({
+    cachedSessionRef,
+    setIsLoggedIn,
+    setActiveTab,
+    setShowForm,
+    setEditingContact,
+    setViewingContact,
+    setShowImport,
+    setShowExport,
+    setSelectedContacts,
+    setShowCreateEvent,
+    setViewingEvent,
+    setShowDeleteConfirm,
+    setShowPersonalSettings,
+    setCurrentUserName,
+    setCurrentUserEmail,
+    setHasExistingPassword,
+    setIncubatees,
+    setUnassignedFounders,
+    setSelectedIncubatees,
+    setShowIncubateeForm,
+    setEditingIncubatee,
+    setViewingIncubatee,
+    setViewingFounder,
+    setShowAddFounderModal,
+    setShowDeleteIncubateeConfirm,
+    setShowIncubateeExport,
+    setShowFounderExport,
+    setSearchQuery,
+    setGraduatedFrom,
+    setGraduatedTo,
+    setStatusFilter,
+  });
 
-    const rememberMe = () => localStorage.getItem('remember_me') === 'true';
-    const loginInitiated = () => localStorage.getItem('login_initiated') === 'true';
-
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!isMounted) return;
-
-      // After a Google OAuth flow, auth_method is set to 'oauth'.
-      // Treat the session as valid regardless of rememberMe so the user isn't
-      // immediately signed out before onAuthStateChange can fire SIGNED_IN.
-      const isOAuthReturn = localStorage.getItem('auth_method') === 'oauth';
-
-      if (data.session && !rememberMe() && !loginInitiated() && !isOAuthReturn) {
-        await supabase.auth.signOut();
-        setIsLoggedIn(false);
-        return;
-      }
-
-      if (data.session) {
-        const { name, email } = deriveUserProfile(data.session.user);
-        setCurrentUserEmail(email);
-        setCurrentUserName(name);
-      }
-
-      setIsLoggedIn(rememberMe() || isOAuthReturn ? !!data.session : false);
-    });
-
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!isMounted) return;
-
-        if (!session) {
-          setIsLoggedIn(false);
-          return;
-        }
-
-        const allowAutoLogin = rememberMe();
-        const hasLoginIntent = loginInitiated();
-
-        if (_event === 'INITIAL_SESSION' && !allowAutoLogin && !hasLoginIntent) {
-          setIsLoggedIn(false);
-          return;
-        }
-
-        if (hasLoginIntent) {
-          localStorage.removeItem('login_initiated');
-        }
-
-        const { name, email } = deriveUserProfile(session.user);
-        setCurrentUserEmail(email);
-        setCurrentUserName(name);
-
-        const isGoogleOAuth = localStorage.getItem('pending_google_oauth') === 'true';
-
-        // --- Google OAuth enforcement ---
-        // After Google OAuth, verify the signed-in email exists in the teams table.
-        // If not pre-added by admin, reject the login.
-        if (isGoogleOAuth) {
-          localStorage.removeItem('pending_google_oauth');
-
-          const googleEmail = (session.user?.email || '').toLowerCase();
-          if (!googleEmail) {
-            await supabase.auth.signOut();
-            setIsLoggedIn(false);
-            setSyncError('Could not determine email from Google account.');
-            return;
-          }
-
-          // Check directly against the teams table (no Edge Function needed)
-          const { data: teamRow, error: teamError } = await supabase
-            .from('teams')
-            .select('id, has_access')
-            .ilike('email', googleEmail)
-            .maybeSingle();
-
-          if (teamError) {
-            console.error('Teams lookup error after Google OAuth:', teamError);
-          }
-
-          const isAllowed = Boolean(teamRow?.id) && Boolean(teamRow?.has_access);
-
-          if (!isAllowed) {
-            await supabase.auth.signOut();
-            setIsLoggedIn(false);
-            setSyncError(
-              'This Google account is not authorized. Ask your admin to add your email to the team first.'
-            );
-            return;
-          }
-        }
-
-        // Cache the session token for use in fetchCurrentUserRole and services
-        // like grantAccess. This survives clock-skew scenarios where getSession()
-        // returns null because the SDK discards a token it sees as "from the future".
-        cachedSessionRef.current = { accessToken: session.access_token, user: session.user };
-        setCachedSession(session.access_token, session.user);
-
-        // Link the auth user to their teams row (sets user_id + has_access)
-        // This covers all login methods: password, magic link, Google OAuth, etc.
-        // Pass access_token directly so linkMyAccountToTeam doesn't call
-        // refreshSession() which can corrupt the session mid-transition.
-        try {
-          await linkMyAccountToTeam(session.user, session.access_token);
-        } catch (e) {
-          console.warn('Account linking failed (role-based features may not work):', e);
-        }
-
-        setIsLoggedIn(true);
-      }
-    );
-
-    return () => {
-      isMounted = false;
-      subscription?.subscription.unsubscribe();
-    };
-  }, []);
+  const {
+    handleRestoreTeamMember,
+    handlePermanentDeleteTeamMember,
+    handleArchiveTeamMemberLocal,
+  } = useTeamArchiveActions({
+    setIsSyncing,
+    setSyncError,
+    setArchivedTeamMembers,
+    setTeamRefreshToken,
+  });
 
   const fetchCurrentUserRole = async () => {
     setIsRoleLoading(true);
     try {
-      // Try getUser first; fall back to session user (avoids AuthSessionMissingError on OAuth).
-      // getUser() makes a network call to validate the token — it throws
-      // AuthSessionMissingError when the OAuth session hasn't fully committed to
-      // the SDK's in-memory state yet. Always treat this error as a soft fallback.
-      let authUser: any = null;
-      let accessToken: string | null = null;
+      const resolved = await resolveCurrentUserRoleContext({
+        cachedSession: cachedSessionRef.current,
+        fallbackName: currentUserName,
+        fallbackEmail: currentUserEmail,
+      });
 
-      try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (!userError && userData?.user) {
-          authUser = userData.user;
-        }
-      } catch {
-        // AuthSessionMissingError — session not yet in SDK memory; will use fallbacks below
-      }
-
-      // Always grab the session to get the access token (needed for edge function fallback)
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session) {
-        accessToken = sessionData.session.access_token;
-        if (!authUser) {
-          authUser = sessionData.session.user;
-        }
-      }
-
-      // Fallback: use the token/user cached from onAuthStateChange.
-      // This is essential when the device clock is skewed — getSession() returns
-      // null because the SDK refuses to restore a token it thinks is from the
-      // future, but the token we received directly from the auth event is still valid.
-      if (!accessToken && cachedSessionRef.current?.accessToken) {
-        accessToken = cachedSessionRef.current.accessToken;
-        console.log('fetchCurrentUserRole: using cached session token (clock skew fallback)');
-      }
-      if (!authUser && cachedSessionRef.current?.user) {
-        authUser = cachedSessionRef.current.user;
-      }
-
-      if (!authUser) {
-        setCurrentUserRole(null);
-        // Only clear name/email if nothing was set yet
-        if (!currentUserName && !currentUserEmail) {
-          setCurrentUserName('');
-          setCurrentUserEmail('');
-        }
-        setHasExistingPassword(false);
-        return;
-      }
-      const { name: derivedName, email: derivedEmail } = deriveUserProfile(authUser);
-      const storedAuthMethod = localStorage.getItem('auth_method');
-      const metadataHasPassword = Boolean(
-        (authUser.user_metadata as { has_password?: boolean; password_set?: boolean } | undefined)
-          ?.has_password ??
-          (authUser.user_metadata as { has_password?: boolean; password_set?: boolean } | undefined)
-            ?.password_set
-      );
-      setHasExistingPassword(storedAuthMethod === 'password' || metadataHasPassword);
-
-      const userEmail = derivedEmail || authUser.email || '';
-      setCurrentUserEmail(userEmail);
-
-      // Try finding the teams row by user_id first, then fall back to email lookup
-      let roleRow: any = null;
-      let roleError: any = null;
-
-      const { data: byUserId, error: byUserIdError } = await supabase
-        .from('teams')
-        .select('id, email, first_name, last_name, roles(role_name), departments(department_name)')
-        .eq('user_id', authUser.id)
-        .or('has_access.eq.true,has_access.is.null')
-        .maybeSingle();
-
-      if (!byUserIdError && byUserId) {
-        roleRow = byUserId;
-      } else {
-        // Fallback: look up by email (covers Google OAuth before user_id is linked)
-        if (userEmail) {
-          const { data: byEmail, error: byEmailError } = await supabase
-            .from('teams')
-            .select('id, email, first_name, last_name, roles(role_name), departments(department_name)')
-            .ilike('email', userEmail)
-            .or('has_access.eq.true,has_access.is.null')
-            .maybeSingle();
-
-          if (byEmailError) {
-            roleError = byEmailError;
-          } else {
-            roleRow = byEmail;
-          }
-        } else {
-          roleError = byUserIdError;
-        }
-      }
-
-      if (roleError) {
-        console.warn('Supabase: failed to load current user role via direct query', roleError);
-      }
-
-      // If direct DB lookups failed (e.g. RLS blocking or user_id not linked),
-      // use the process-team-auth edge function as a fallback.
-      // It uses the service role key to bypass RLS and link the account.
-      if (!roleRow) {
-        console.log('Direct role lookup failed, trying process-team-auth edge function...');
-        const linkedRole = await linkMyAccountToTeam(authUser, accessToken ?? undefined);
-        if (linkedRole) {
-          setCurrentUserRole(linkedRole as TeamRole);
-          // Re-try the direct lookup now that user_id is linked
-          const { data: retryRow } = await supabase
-            .from('teams')
-            .select('id, email, first_name, last_name, roles(role_name), departments(department_name)')
-            .eq('user_id', authUser.id)
-            .or('is_active.eq.true,is_active.is.null')
-            .maybeSingle();
-          if (retryRow) {
-            roleRow = retryRow;
-            // Update name from teams row
-            const teamName = `${retryRow.first_name ?? ''} ${retryRow.last_name ?? ''}`.trim();
-            if (teamName) setCurrentUserName(teamName);
-            else setCurrentUserName(derivedName || userEmail || '');
-            if (retryRow.email) setCurrentUserEmail(retryRow.email);
-            // Extract department from retry
-            const retryDept = retryRow.departments as { department_name?: string } | { department_name?: string }[] | null;
-            const retryDeptName = Array.isArray(retryDept) ? retryDept[0]?.department_name ?? null : retryDept?.department_name ?? null;
-            setCurrentUserDepartment(retryDeptName);
-          } else {
-            // RLS still blocks retry — use edge function role and derived profile
-            setCurrentUserName(derivedName || userEmail || '');
-          }
-          return; // Role already set from edge function
-        } else {
-          setCurrentUserRole(null);
-          setCurrentUserName(derivedName || userEmail || '');
-          return;
-        }
-      }
-
-      const rolesData = roleRow?.roles as { role_name?: string } | { role_name?: string }[] | null;
-      const roleName = Array.isArray(rolesData)
-        ? rolesData[0]?.role_name ?? null
-        : rolesData?.role_name ?? null;
-      setCurrentUserRole((roleName as TeamRole | null) ?? null);
-
-      // Extract department
-      const deptData = roleRow?.departments as { department_name?: string } | { department_name?: string }[] | null;
-      const deptName = Array.isArray(deptData)
-        ? deptData[0]?.department_name ?? null
-        : deptData?.department_name ?? null;
-      setCurrentUserDepartment(deptName);
-
-      if (roleRow) {
-        const teamName = `${roleRow.first_name ?? ''} ${roleRow.last_name ?? ''}`.trim();
-        if (teamName) {
-          setCurrentUserName(teamName);
-        } else if (derivedName) {
-          setCurrentUserName(derivedName);
-        } else {
-          setCurrentUserName(userEmail);
-        }
-
-        if (roleRow.email) {
-          setCurrentUserEmail(roleRow.email);
-        }
-      } else if (derivedName) {
-        setCurrentUserName(derivedName);
-      } else {
-        setCurrentUserName(userEmail);
-      }
+      setCurrentUserRole(resolved.role);
+      setCurrentUserDepartment(resolved.department);
+      setCurrentUserName(resolved.userName);
+      setCurrentUserEmail(resolved.userEmail);
+      setHasExistingPassword(resolved.hasExistingPassword);
     } finally {
       setIsRoleLoading(false);
     }
@@ -869,13 +531,6 @@ export default function App() {
     });
 
   const isMemberPath = window.location.pathname === '/member';
-
-  useEffect(() => {
-    if (!isMemberPath || !isLoggedIn || isRoleLoading) return;
-    if (currentUserRole !== 'Member') {
-      window.location.replace('/');
-    }
-  }, [currentUserRole, isLoggedIn, isMemberPath, isRoleLoading]);
 
   const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
     let { data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null');
@@ -958,7 +613,7 @@ export default function App() {
       throw error;
     }
 
-    return (data ?? []).map(mapEventRowToEvent);
+    return (data ?? []).map((row) => mapEventRowToEvent(row, mapContactRowToContact));
   };
 
   const fetchArchivedEventsFromSupabase = async (): Promise<Event[]> => {
@@ -985,7 +640,7 @@ export default function App() {
       throw error;
     }
 
-    return (data ?? []).map(mapEventRowToEvent);
+    return (data ?? []).map((row) => mapEventRowToEvent(row, mapContactRowToContact));
   };
 
   const fetchArchivedTeamMembersFromSupabase = async (): Promise<TeamMember[]> => {
@@ -1430,65 +1085,23 @@ export default function App() {
       });
   }, [activeTab, isLoggedIn]);
 
-  const handleLogin = async () => {
-    setIsLoggedIn(true);
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      const { name, email } = deriveUserProfile(data.session.user);
-      setCurrentUserEmail(email);
-      setCurrentUserName(name);
-    }
-  };
+  const { handleSendEmailCampaign, handleReset, handleEmailUnverifiedContacts } = useContactUiStateActions({
+    setSearchQuery,
+    setGraduatedFrom,
+    setGraduatedTo,
+    setStatusFilter,
+    setSelectedContacts,
+    setActiveTab,
+  });
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Supabase: failed to sign out', error);
-    }
-
-    clearCachedSession();
-    cachedSessionRef.current = null;
-    localStorage.removeItem('auth_method');
-    localStorage.removeItem('login_initiated');
-    localStorage.removeItem('pending_google_oauth');
-    setIsLoggedIn(false);
-    setActiveTab('home');
-    setShowForm(false);
-    setEditingContact(null);
-    setViewingContact(null);
-    setShowImport(false);
-    setShowExport(false);
-    setSelectedContacts([]);
-    setShowCreateEvent(false);
-    setViewingEvent(null);
-    setShowDeleteConfirm(false);
-    setShowPersonalSettings(false);
-    setCurrentUserName('');
-    setCurrentUserEmail('');
-    setHasExistingPassword(false);
-    // Reset incubatee state
-    setIncubatees([]);
-    setUnassignedFounders([]);
-    setSelectedIncubatees([]);
-    setShowIncubateeForm(false);
-    setEditingIncubatee(null);
-    setViewingIncubatee(null);
-    setViewingFounder(null);
-    setShowAddFounderModal(false);
-    setShowDeleteIncubateeConfirm(false);
-    setShowIncubateeExport(false);
-    setShowFounderExport(false);
-    localStorage.removeItem('auth_method');
-  };
-
-  const handleReset = () => {
-    setSearchQuery('');
-    setGraduatedFrom('');
-    setGraduatedTo('');
-    setStatusFilter('all');
-    setSelectedContacts([]);
-  };
+  const {
+    handleOpenPersonalSettings,
+    handleClosePersonalSettings,
+    handlePasswordUpdated,
+  } = useAuthUiActions({
+    setShowPersonalSettings,
+    setHasExistingPassword,
+  });
 
   // ─── Incubatee Handlers ───
 
@@ -1589,16 +1202,69 @@ export default function App() {
     return startupMatch || founderMatch;
   });
 
-  const handleNewIncubatee = () => {
-    setEditingIncubatee(null);
-    setShowIncubateeForm(true);
+  const handleSwitchToStartupView = () => {
+    setIncubateeViewMode('Startup');
   };
 
-  const handleEditIncubatee = (incubatee: Incubatee) => {
-    setViewingIncubatee(null);
-    setEditingIncubatee(incubatee);
-    setShowIncubateeForm(true);
+  const handleSwitchToFounderView = () => {
+    setIncubateeViewMode('founders');
   };
+
+  const handleStartupSortChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setStartupSortBy(event.target.value as 'cohort' | 'status' | 'alphabetical');
+  };
+
+  const handleFounderSortChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setFounderSortBy(event.target.value as 'roles' | 'name' | 'startup');
+  };
+
+  const handleIncubateeSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setIncubateeSearchQuery(event.target.value);
+  };
+
+  const {
+    handleNewIncubatee,
+    handleEditIncubatee,
+    handleCloseIncubateeForm,
+    handleViewIncubatee,
+    handleCloseViewIncubatee,
+    handleViewFounder,
+    handleCloseViewFounder,
+    handleOpenAddFounderModal,
+    handleCloseAddFounderModal,
+  } = useIncubateeModalActions({
+    setEditingIncubatee,
+    setShowIncubateeForm,
+    setViewingIncubatee,
+    setViewingFounder,
+    setShowAddFounderModal,
+  });
+
+  const {
+    handleOpenDeleteFounderConfirm,
+    handleCancelDeleteFounderConfirm,
+    handleOpenDeleteIncubateeConfirm,
+    handleCancelDeleteIncubateeConfirm,
+  } = useIncubateeConfirmActions({
+    selectedFounders,
+    selectedIncubatees,
+    setShowDeleteFounderConfirm,
+    setShowDeleteIncubateeConfirm,
+  });
+
+  const {
+    handleOpenIncubateeExport,
+    handleCloseIncubateeExport,
+    handleOpenFounderExport,
+    handleCloseFounderExport,
+    handleOpenCohortSummaryOverlay,
+    handleOpenStatusSummaryOverlay,
+    handleCloseSummaryOverlay,
+  } = useIncubateeUiActions({
+    setShowIncubateeExport,
+    setShowFounderExport,
+    setActiveSummaryOverlay,
+  });
 
   const handleSaveIncubatee = async (incubatee: Incubatee) => {
     // Optimistic local update
@@ -1633,10 +1299,6 @@ export default function App() {
     } finally {
       setIsSyncing(false);
     }
-  };
-
-  const handleViewIncubatee = (incubatee: Incubatee) => {
-    setViewingIncubatee(incubatee);
   };
 
   const handleDeleteIncubatees = async () => {
@@ -1695,10 +1357,6 @@ export default function App() {
       console.error('❌ Failed to unassign founders in database:', error);
       setSyncError('Founders archived locally but failed to sync with database.');
     });
-  };
-
-  const handleViewFounder = (founder: Founder, incubatee: Incubatee) => {
-    setViewingFounder({ founder, incubatee });
   };
 
   const handleSaveFounder = async (updatedFounder: Founder) => {
@@ -1832,495 +1490,166 @@ export default function App() {
     setShowForm(true);
   };
 
-  const handleUpdateContactStatus = async (updatedContact: Contact) => {
-    const previous = contacts.find((c) => c.id === updatedContact.id);
-    const becameUnverified =
-      updatedContact.status === 'Unverified' && previous?.status !== 'Unverified';
-
-    // Update contact status locally
-    setContacts((prev) =>
-      prev.map((c) => (c.id === updatedContact.id ? updatedContact : c))
-    );
-
-    // Also update the currently viewed contact so the modal reflects the change
-    setViewingContact(updatedContact);
-
-    // Update status in backend via email_address table
-    try {
-      if (updatedContact.email) {
-        await ensureEmailId(updatedContact.email, updatedContact.status);
-
-        if (becameUnverified) {
-          try {
-            await sendVerificationEmail({
-              to: updatedContact.email,
-              firstName: updatedContact.firstName,
-              brandName: 'Marian Alumni Network',
-            });
-            console.log('✅ Verification email sent for unverified contact');
-          } catch (emailError) {
-            console.error('❌ Status updated but failed to send verification email:', emailError);
-            setSyncError('Contact status updated, but sending verification email failed.');
-          }
-        }
-
-        console.log('✅ Contact status updated in email_address table');
-      }
-    } catch (error) {
-      console.error('❌ Failed to update contact status in backend:', error);
-      setSyncError('Failed to update contact status in database.');
-    }
-  };
-
-  const handleSaveContact = async (contact: Contact) => {
-    const normalizedContact: Contact = {
-      ...contact,
-      name: `${contact.firstName} ${contact.lastName}`.trim(),
-      dateGraduated: contact.dateGraduated || '',
-    };
-
-    const editingId = editingContact?.id;
-
-    setShowForm(false);
-    setEditingContact(null);
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      const savedContact = await persistContactToSupabase(normalizedContact);
-      console.log('✅ Contact saved with alumniId:', savedContact.alumniId);
-
-      const shouldSendVerification =
-        savedContact.status === 'Unverified' &&
-        Boolean(savedContact.email?.trim()) &&
-        (!editingId || editingContact?.status !== 'Unverified');
-
-      if (shouldSendVerification && savedContact.email) {
-        try {
-          await sendVerificationEmail({
-            to: savedContact.email,
-            firstName: savedContact.firstName,
-            brandName: 'Marian Alumni Network',
-          });
-          console.log('✅ Verification email sent for newly unverified contact');
-        } catch (emailError) {
-          console.error('❌ Contact saved but failed to send verification email:', emailError);
-          setSyncError('Contact saved, but sending verification email failed.');
-        }
-      }
-
-      setContacts((prev) => {
-        if (editingId) {
-          return prev.map((c) => (c.id === editingId ? savedContact : c));
-        }
-
-        const hasSameEmail = prev.find((c) => c.email === savedContact.email);
-        if (hasSameEmail) {
-          return prev.map((c) => (c.email === savedContact.email ? savedContact : c));
-        }
-
-        return [...prev, savedContact];
-      });
-    } catch (error) {
-      console.error('❌ Failed to save contact', error);
-      setSyncError('Failed to save contact to Supabase.');
-      // Still add with temporary ID for offline use
-      setContacts((prev) =>
-        editingId
-          ? prev.map((c) => (c.id === editingId ? normalizedContact : c))
-          : [...prev, normalizedContact]
-      );
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setEditingContact(null);
-  };
-
-  const handleCloseView = () => {
-    setViewingContact(null);
-  };
-
-  const handleDelete = () => {
-    if (selectedContacts.length > 0) {
-      setShowDeleteConfirm(true);
-    }
-  };
-
-  const handleDeleteEvent = async (eventId: string) => {
-    console.log('🗑️ Delete event requested:', eventId);
-    const confirmed = await openConfirm({
-      title: 'Delete event',
-      message: 'Are you sure you want to delete this event?',
-      confirmLabel: 'Delete',
-      tone: 'danger',
-    });
-
-    if (!confirmed) {
-      console.log('❌ User cancelled deletion');
-      return;
-    }
-
-    console.log('✅ User confirmed deletion');
-
-    const eventToArchive = events.find((e) => e.id === eventId);
-    console.log('Event to archive:', eventToArchive);
-    console.log('Current archived events:', archivedEvents.length);
-
-    if (eventToArchive) {
-      const updatedArchive = [...archivedEvents, eventToArchive];
-      setArchivedEvents(updatedArchive);
-      console.log('✅ Event added to archive. New archive count:', updatedArchive.length);
-    } else {
-      console.warn('⚠️ Event not found in events list');
-    }
-
-    const updatedEvents = events.filter((e) => e.id !== eventId);
-    setEvents(updatedEvents);
-    console.log('✅ Event removed from active list. Remaining events:', updatedEvents.length);
-
-    deleteEventFromSupabase(eventId).catch((error) => {
-      console.error('❌ Failed to mark event as inactive in database', error);
-      setSyncError('Event archived locally but failed to update in database.');
-    });
-  };
-
-  const handleImportContacts = (importedContacts: Contact[]) => {
-    setContacts([...contacts, ...importedContacts]);
-    setIsSyncing(true);
-
-    persistContactsBatch(importedContacts)
-      .then((saved) => {
-        if (!saved.length) return;
-
-        setContacts((prev) => {
-          const filtered = prev.filter(
-            (contact) => !saved.some((s) => s.id === contact.id || s.email === contact.email)
-          );
-          return [...filtered, ...saved];
-        });
-      })
-      .catch((error) => {
-        console.error('Supabase: failed to import contacts', error);
-        setSyncError('Imported locally but failed to sync new contacts to Supabase.');
-      })
-      .finally(() => setIsSyncing(false));
-  };
-
-  const handleViewContact = (contact: Contact) => {
-    setViewingContact(contact);
-  };
-
-  const handleCreateEvent = async (event: Event) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      console.log('App - handleCreateEvent received event:', {
-        id: event.id,
-        title: event.title,
-        attendeeCount: event.attendees.length,
-        attendees: event.attendees.map(a => ({ id: a.id, name: a.name, alumniId: a.alumniId }))
-      });
-
-      // Event is already saved to database by createEvent()
-      // Just add it to the local state
-      setEvents((prev) => [...prev, event]);
-      setShowCreateEvent(false);
-
-      await triggerEventInvites(event, event.attendees, 'create');
-    } catch (err) {
-      console.error('Failed to add event', err);
-      setSyncError('Failed to add event.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleEditEvent = (event: Event) => {
-    setEditingEvent(event);
-  };
-
-  const handleUpdateEvent = async (
-    eventId: string,
-    eventData: Omit<Event, 'id' | 'attendees'>,
-    attendees: Contact[]
-  ) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      console.log('App - handleUpdateEvent called:', {
-        eventId,
-        title: eventData.title,
-        attendeeCount: attendees.length,
-      });
-
-      // Update event in database
-      const updatedEvent = await updateEvent(eventId, eventData, attendees);
-
-      // Update local state
-      setEvents((prev) =>
-        prev.map((e) => (e.id === eventId ? updatedEvent : e))
-      );
-
-      setEditingEvent(null);
-      console.log('✅ Event updated successfully');
-    } catch (err) {
-      console.error('❌ Failed to update event', err);
-      setSyncError('Failed to update event.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleViewEvent = (event: Event) => {
-    setViewingEvent(event);
-  };
-
-  const handleAddAttendees = async (eventId: string, newAttendees: Contact[]) => {
-    console.log('🎯 App - handleAddAttendees called:', {
-      eventId,
-      newAttendeesCount: newAttendees.length,
-      newAttendees: newAttendees.map(a => ({ id: a.id, name: a.name, alumniId: a.alumniId }))
-    });
-    const normalizedAttendees = newAttendees.map((attendee) => ({
-      ...attendee,
-      rsvpStatus: attendee.rsvpStatus ?? 'pending',
-    }));
-
-    const updatedEvents = events.map((event) =>
-      event.id === eventId
-        ? { ...event, attendees: [...event.attendees, ...normalizedAttendees] }
-        : event
-    );
-    const targetEvent = updatedEvents.find((event) => event.id === eventId);
-    
-    setEvents(updatedEvents);
-    
-    // Update viewing event if it's the one being modified
-    if (viewingEvent && viewingEvent.id === eventId) {
-      const updatedViewingEvent = updatedEvents.find(e => e.id === eventId);
-      if (updatedViewingEvent) {
-        setViewingEvent(updatedViewingEvent);
-      }
-    }
-
-    await persistEventAttendees(eventId, normalizedAttendees).catch((error) => {
-      console.error('Supabase: failed to add attendees', error);
-      setSyncError('Added attendees locally but failed to sync with Supabase.');
-    });
-
-    if (targetEvent) {
-      triggerEventInvites(targetEvent, normalizedAttendees, 'add-attendees');
-    }
-  };
-
-  const handleRestoreContact = async (contact: Contact) => {
-    // Update local state immediately
-    setContacts([...contacts, contact]);
-    setArchivedContacts(archivedContacts.filter((c) => c.id !== contact.id));
-    
-    // Update database
-    setIsSyncing(true);
-    try {
-      await restoreContactInSupabase(contact.id);
-      console.log('✅ Contact restored in database');
-    } catch (error) {
-      console.error('❌ Failed to restore contact in database:', error);
-      setSyncError('Contact restored locally but failed to update in database.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleRestoreEvent = async (event: Event) => {
-    // Update local state immediately
-    setEvents([...events, event]);
-    setArchivedEvents(archivedEvents.filter((e) => e.id !== event.id));
-    
-    // Update database
-    setIsSyncing(true);
-    try {
-      await restoreEventInSupabase(event.id);
-      console.log('✅ Event restored in database');
-    } catch (error) {
-      console.error('❌ Failed to restore event in database:', error);
-      setSyncError('Event restored locally but failed to update in database.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handlePermanentDeleteContact = async (contactId: string) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      await deleteContactPermanently(contactId);
-      setArchivedContacts((prev) => prev.filter((c) => c.id !== contactId));
-      console.log('✅ Contact permanently deleted from database');
-    } catch (error) {
-      console.error('❌ Failed to permanently delete contact', error);
-      setSyncError('Failed to permanently delete contact from database.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handlePermanentDeleteEvent = async (eventId: string) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      await deleteEventPermanently(eventId);
-      setArchivedEvents((prev) => prev.filter((e) => e.id !== eventId));
-    } catch (error) {
-      console.error('❌ Failed to permanently delete event', error);
-      setSyncError('Failed to permanently delete event from Supabase.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleRestoreTeamMember = async (member: TeamMember) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      await restoreTeamMember(member.id);
-      setArchivedTeamMembers((prev) => prev.filter((m) => m.id !== member.id));
-      setTeamRefreshToken((token) => token + 1);
-    } catch (error) {
-      console.error('❌ Failed to restore team member', error);
-      setSyncError('Failed to restore team member from Supabase.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handlePermanentDeleteTeamMember = async (id: string) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    try {
-      await deleteTeamMemberPermanently(id);
-      setArchivedTeamMembers((prev) => prev.filter((m) => m.id !== id));
-      setTeamRefreshToken((token) => token + 1);
-    } catch (error) {
-      console.error('❌ Failed to permanently delete team member', error);
-      setSyncError('Failed to permanently delete team member from Supabase.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleArchiveTeamMemberLocal = (member: TeamMember) => {
-    setArchivedTeamMembers((prev) => {
-      const exists = prev.some((m) => m.id === member.id);
-      return exists ? prev : [...prev, member];
-    });
-    setTeamRefreshToken((token) => token + 1);
-  };
-
-  // ─── Incubatee Archive Handlers ──────────────────────────────
-
-  const handleRestoreIncubatee = async (incubatee: Incubatee) => {
-    setArchivedIncubatees((prev) => prev.filter((i) => i.id !== incubatee.id));
-    setIncubatees((prev) => [...prev, incubatee]);
-
-    setIsSyncing(true);
-    try {
-      await restoreIncubateesInDb([incubatee.id]);
-      console.log('✅ Incubatee restored in database');
-    } catch (error) {
-      console.error('❌ Failed to restore incubatee:', error);
-      setSyncError('Incubatee restored locally but failed to sync with database.');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handlePermanentDeleteIncubatee = async (id: string) => {
-    setIsSyncing(true);
-    setSyncError(null);
-
-    // Preserve founders from the deleted startup
-    const deletedIncubatee = archivedIncubatees.find((i) => i.id === id);
-    if (deletedIncubatee && deletedIncubatee.founders.length > 0) {
-      const orphanedFounders = deletedIncubatee.founders.map((f) => ({
-        ...f,
-        startupName: deletedIncubatee.startupName,
-      }));
-      setArchivedFounders((prev) => [...prev, ...orphanedFounders]);
-    }
-
-    try {
-      await deleteIncubateePermanentlyInDb(id);
-      setArchivedIncubatees((prev) => prev.filter((i) => i.id !== id));
-      console.log('✅ Incubatee permanently deleted, founders preserved');
-    } catch (error) {
-      console.error('❌ Failed to permanently delete incubatee:', error);
-      setSyncError('Failed to permanently delete incubatee from database.');
-      // Rollback: remove the orphaned founders we just added
-      if (deletedIncubatee) {
-        const founderIds = new Set(deletedIncubatee.founders.map((f) => f.id));
-        setArchivedFounders((prev) => prev.filter((f) => !founderIds.has(f.id)));
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleSendEmailCampaign = () => {
-    setActiveTab('events');
-  };
-
-  const handleEmailUnverifiedContacts = () => {
-    setSearchQuery('');
-    setGraduatedFrom('');
-    setGraduatedTo('');
-    setStatusFilter('Unverified');
-    setSelectedContacts([]);
-    setActiveTab('contacts');
-  };
-
-
-
-  const filteredContacts = contacts.filter((contact) => {
-    const query = searchQuery.trim().toLowerCase();
-    const matchesQuery = query
-      ? [
-          contact.name,
-          contact.college,
-          contact.program,
-          contact.email,
-          contact.occupation,
-          contact.company,
-        ]
-          .filter(Boolean)
-          .some((field) => field!.toLowerCase().includes(query))
-      : true;
-
-    const hasFrom = Boolean(graduatedFrom);
-    const hasTo = Boolean(graduatedTo);
-    const graduatedDate = contact.dateGraduated ? new Date(contact.dateGraduated) : null;
-
-    const matchesDate = (() => {
-      if (!hasFrom && !hasTo) return true;
-      if (!graduatedDate) return false;
-
-      const fromOk = hasFrom ? graduatedDate >= new Date(graduatedFrom) : true;
-      const toOk = hasTo ? graduatedDate <= new Date(graduatedTo) : true;
-      return fromOk && toOk;
-    })();
-
-    const matchesStatus = statusFilter === 'all' || contact.status === statusFilter;
-
-    return matchesQuery && matchesDate && matchesStatus;
+  const { handleUpdateContactStatus } = useContactStatusActions({
+    contacts,
+    setContacts,
+    setViewingContact,
+    setSyncError,
+    ensureEmailId,
+    sendVerificationEmail,
+  });
+
+  const {
+    handleCancelDeleteConfirm,
+    handleConfirmArchiveContacts,
+  } = useContactArchiveActions({
+    contacts,
+    selectedContacts,
+    setContacts,
+    setArchivedContacts,
+    setSelectedContacts,
+    setShowDeleteConfirm,
+    setIsSyncing,
+    setSyncError,
+    deleteContactFromSupabase,
+  });
+
+  const {
+    handleSaveContact,
+    handleCloseForm,
+    handleCloseView,
+  } = useContactFormActions({
+    editingContact,
+    setContacts,
+    setShowForm,
+    setEditingContact,
+    setViewingContact,
+    setIsSyncing,
+    setSyncError,
+    persistContactToSupabase,
+    sendVerificationEmail,
+  });
+
+  const { handleDeleteEvent } = useEventArchiveActions({
+    events,
+    archivedEvents,
+    setEvents,
+    setArchivedEvents,
+    setSyncError,
+    openConfirm,
+    deleteEventFromSupabase,
+  });
+
+  const {
+    handleDelete,
+    handleImportContacts,
+    handleViewContact,
+  } = useContactListActions({
+    selectedContacts,
+    setContacts,
+    setViewingContact,
+    setShowDeleteConfirm,
+    setIsSyncing,
+    setSyncError,
+    persistContactsBatch,
+  });
+
+  const {
+    handleOpenCreateEvent,
+    handleCloseCreateEvent,
+    handleEditEvent,
+    handleCloseEditEvent,
+    handleViewEvent,
+    handleCloseViewEvent,
+  } = useEventModalActions({
+    setShowCreateEvent,
+    setEditingEvent,
+    setViewingEvent,
+  });
+
+  const {
+    handleOpenImport,
+    handleCloseImport,
+    handleOpenExport,
+    handleCloseExport,
+  } = useContactModalActions({
+    setShowImport,
+    setShowExport,
+  });
+
+  const {
+    handleCreateEvent,
+    handleUpdateEvent,
+    handleAddAttendees,
+  } = useEventActions({
+    events,
+    viewingEvent,
+    setEvents,
+    setViewingEvent,
+    setEditingEvent,
+    setShowCreateEvent,
+    setIsSyncing,
+    setSyncError,
+    triggerEventInvites,
+    persistEventAttendees,
+  });
+
+  const {
+    handleRestoreContact,
+    handleRestoreEvent,
+    handlePermanentDeleteContact,
+    handlePermanentDeleteEvent,
+  } = useArchiveActions({
+    setContacts,
+    setArchivedContacts,
+    setEvents,
+    setArchivedEvents,
+    setIsSyncing,
+    setSyncError,
+    restoreContactInSupabase,
+    restoreEventInSupabase,
+    deleteContactPermanently,
+    deleteEventPermanently,
+  });
+
+  const {
+    handleRestoreIncubatee,
+    handlePermanentDeleteIncubatee,
+  } = useIncubateeArchiveActions({
+    archivedIncubatees,
+    setArchivedIncubatees,
+    setIncubatees,
+    setArchivedFounders,
+    setIsSyncing,
+    setSyncError,
+    restoreIncubateesInDb,
+    deleteIncubateePermanentlyInDb,
+  });
+
+  const {
+    handleDeleteArchivedFounder,
+    handleRemoveFounderFromArchivedIncubatee,
+    handleRestoreFounder,
+  } = useFounderArchiveActions({
+    setArchivedFounders,
+    setArchivedIncubatees,
+    setUnassignedFounders,
+    deleteFoundersFromSupabase,
+  });
+
+  const { handleViewFounderRow } = useFounderTableActions({
+    incubatees,
+    handleViewFounder,
+  });
+
+  const handleCloseDialog = () => setDialog(null);
+
+  const filteredContacts = useFilteredContacts({
+    contacts,
+    searchQuery,
+    graduatedFrom,
+    graduatedTo,
+    statusFilter,
   });
 
   // Show login page if not logged in
@@ -2372,31 +1701,23 @@ export default function App() {
   }
 
   if (isMemberPath) {
-    if (isRoleLoading) {
-      return (
-        <div className="flex min-h-screen items-center justify-center bg-[#F5F1ED]">
-          <div className="rounded-lg border border-gray-200 bg-white px-6 py-4 text-gray-700">
-            Loading your access...
-          </div>
-        </div>
-      );
-    }
-
-    if (currentUserRole !== 'Member') {
-      return null;
-    }
-
     return (
-      <div className="min-h-screen bg-[#F5F1ED]">
-        <main className="max-w-[1200px] mx-auto p-8">
-          <Home
-            contacts={contacts}
-            onViewContact={handleViewContact}
-            onSendEmailCampaign={handleSendEmailCampaign}
-            onEmailUnverifiedContacts={handleEmailUnverifiedContacts}
-          />
-        </main>
-      </div>
+      <MemberRouteGuard
+        isLoggedIn={isLoggedIn}
+        isRoleLoading={isRoleLoading}
+        currentUserRole={currentUserRole}
+      >
+        <div className="min-h-screen bg-[#F5F1ED]">
+          <main className="max-w-[1200px] mx-auto p-8">
+            <Home
+              contacts={contacts}
+              onViewContact={handleViewContact}
+              onSendEmailCampaign={handleSendEmailCampaign}
+              onEmailUnverifiedContacts={handleEmailUnverifiedContacts}
+            />
+          </main>
+        </div>
+      </MemberRouteGuard>
     );
   }
 
@@ -2407,7 +1728,7 @@ export default function App() {
         onTabChange={setActiveTab}
         onLogout={handleLogout}
         currentUserRole={currentUserRole}
-        onOpenSettings={() => setShowPersonalSettings(true)}
+        onOpenSettings={handleOpenPersonalSettings}
         userName={currentUserName}
         userEmail={currentUserEmail}
       />
@@ -2436,7 +1757,7 @@ export default function App() {
           ) : activeTab === 'events' ? (
             <Events
               events={events}
-              onCreateEvent={() => setShowCreateEvent(true)}
+              onCreateEvent={handleOpenCreateEvent}
               onViewEvent={handleViewEvent}
               onDeleteEvent={handleDeleteEvent}
               onEditEvent={handleEditEvent}
@@ -2456,43 +1777,9 @@ export default function App() {
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
               onPermanentDeleteTeamMember={handlePermanentDeleteTeamMember}
               onPermanentDeleteIncubatee={handlePermanentDeleteIncubatee}
-              onDeleteArchivedFounder={async (founderId: string) => {
-                setArchivedFounders((prev) => prev.filter((f) => f.id !== founderId));
-                try {
-                  await deleteFoundersFromSupabase([founderId]);
-                } catch (error) {
-                  console.error('❌ Failed to permanently delete founder from database:', error);
-                }
-              }}
-              onRemoveFounderFromIncubatee={async (incubateeId: string, founderId: string) => {
-                // Remove founder from the archived incubatee's founders array (startup remains)
-                setArchivedIncubatees((prev) =>
-                  prev.map((inc) =>
-                    inc.id === incubateeId
-                      ? { ...inc, founders: inc.founders.filter((f) => f.id !== founderId) }
-                      : inc
-                  )
-                );
-                try {
-                  await deleteFoundersFromSupabase([founderId]);
-                } catch (error) {
-                  console.error('❌ Failed to permanently delete founder from database:', error);
-                }
-              }}
-              onRestoreFounder={(founder: Founder, incubateeId: string | null) => {
-                // Add founder back to unassigned founders list
-                setUnassignedFounders((prev) => [...prev, founder]);
-                // If founder was part of an archived incubatee, remove from that incubatee
-                if (incubateeId) {
-                  setArchivedIncubatees((prev) =>
-                    prev.map((inc) =>
-                      inc.id === incubateeId
-                        ? { ...inc, founders: inc.founders.filter((f) => f.id !== founder.id) }
-                        : inc
-                    )
-                  );
-                }
-              }}
+              onDeleteArchivedFounder={handleDeleteArchivedFounder}
+              onRemoveFounderFromIncubatee={handleRemoveFounderFromArchivedIncubatee}
+              onRestoreFounder={handleRestoreFounder}
             />
           ) : activeTab === 'team' ? (
             <Team
@@ -2520,7 +1807,7 @@ export default function App() {
                   </div>
 
                   <button
-                    onClick={() => setActiveSummaryOverlay('cohort')}
+                    onClick={handleOpenCohortSummaryOverlay}
                     className="bg-white rounded-xl p-6 border border-gray-200 text-left hover:border-[#FF2B5E] hover:shadow-sm transition-all"
                   >
                     <div className="flex items-center gap-3 mb-2">
@@ -2533,7 +1820,7 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => setActiveSummaryOverlay('status')}
+                    onClick={handleOpenStatusSummaryOverlay}
                     className="bg-white rounded-xl p-6 border border-gray-200 text-left hover:border-[#FF2B5E] hover:shadow-sm transition-all"
                   >
                     <div className="flex items-center gap-3 mb-2">
@@ -2568,9 +1855,7 @@ export default function App() {
                         New Startup
                       </button>
                       <button
-                        onClick={() => {
-                          if (selectedIncubatees.length > 0) setShowDeleteIncubateeConfirm(true);
-                        }}
+                        onClick={handleOpenDeleteIncubateeConfirm}
                         disabled={selectedIncubatees.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2578,7 +1863,7 @@ export default function App() {
                         Delete
                       </button>
                       <button
-                        onClick={() => setShowIncubateeExport(true)}
+                        onClick={handleOpenIncubateeExport}
                         disabled={incubatees.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2589,16 +1874,14 @@ export default function App() {
                   ) : (
                     <>
                       <button
-                        onClick={() => setShowAddFounderModal(true)}
+                        onClick={handleOpenAddFounderModal}
                         className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
                       >
                         <Plus className="w-4 h-4" />
                         Add Founder
                       </button>
                       <button
-                        onClick={() => {
-                          if (selectedFounders.length > 0) setShowDeleteFounderConfirm(true);
-                        }}
+                        onClick={handleOpenDeleteFounderConfirm}
                         disabled={selectedFounders.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2606,7 +1889,7 @@ export default function App() {
                         Delete
                       </button>
                       <button
-                        onClick={() => setShowFounderExport(true)}
+                        onClick={handleOpenFounderExport}
                         disabled={allFounders.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2619,7 +1902,7 @@ export default function App() {
                   {/* View Toggle */}
                   <div className="ml-auto flex items-center gap-0 bg-gray-100 rounded-lg p-1">
                     <button
-                      onClick={() => setIncubateeViewMode('Startup')}
+                      onClick={handleSwitchToStartupView}
                       className={`w-28 flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                         incubateeViewMode === 'Startup'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
@@ -2630,7 +1913,7 @@ export default function App() {
                       Startup
                     </button>
                     <button
-                      onClick={() => setIncubateeViewMode('founders')}
+                      onClick={handleSwitchToFounderView}
                       className={`w-28 flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                         incubateeViewMode === 'founders'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
@@ -2648,7 +1931,7 @@ export default function App() {
                   {incubateeViewMode === 'Startup' ? (
                     <select
                       value={startupSortBy}
-                      onChange={(e) => setStartupSortBy(e.target.value as 'cohort' | 'status' | 'alphabetical')}
+                      onChange={handleStartupSortChange}
                       className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
                     >
                       <option value="cohort">Cohort</option>
@@ -2658,7 +1941,7 @@ export default function App() {
                   ) : (
                     <select
                       value={founderSortBy}
-                      onChange={(e) => setFounderSortBy(e.target.value as 'roles' | 'name' | 'startup')}
+                      onChange={handleFounderSortChange}
                       className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
                     >
                       <option value="roles">Roles</option>
@@ -2671,7 +1954,7 @@ export default function App() {
                     <input
                       type="text"
                       value={incubateeSearchQuery}
-                      onChange={(e) => setIncubateeSearchQuery(e.target.value)}
+                      onChange={handleIncubateeSearchChange}
                       placeholder={incubateeViewMode === 'Startup' ? 'Search startup' : 'Search founder'}
                       className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
                     />
@@ -2713,15 +1996,7 @@ export default function App() {
                   unassignedFounders={unassignedFounders}
                   sortBy={founderSortBy}
                   searchQuery={incubateeSearchQuery}
-                  onViewFounder={(row) => {
-                    const inc = incubatees.find((i) =>
-                      i.founders.some((f) => f.id === row.founderId)
-                    );
-                    if (inc) {
-                      const founder = inc.founders.find((f) => f.id === row.founderId);
-                      if (founder) handleViewFounder(founder, inc);
-                    }
-                  }}
+                  onViewFounder={handleViewFounderRow}
                   selectedFounders={selectedFounders}
                   onSelectionChange={setSelectedFounders}
                 />
@@ -2753,14 +2028,14 @@ export default function App() {
                     Delete
                   </button>
                   <button 
-                    onClick={() => setShowImport(true)}
+                    onClick={handleOpenImport}
                     className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
                   >
                     <Upload className="w-4 h-4" />
                     Import
                   </button>
                   <button 
-                    onClick={() => setShowExport(true)}
+                    onClick={handleOpenExport}
                     className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
                   >
                     <Download className="w-4 h-4" />
@@ -2837,7 +2112,7 @@ export default function App() {
         <CreateEvent
           contacts={contacts}
           incubatees={incubatees}
-          onClose={() => setShowCreateEvent(false)}
+          onClose={handleCloseCreateEvent}
           onSave={handleCreateEvent}
         />
       )}
@@ -2847,7 +2122,7 @@ export default function App() {
         <EditEvent
           event={editingEvent}
           contacts={contacts}
-          onClose={() => setEditingEvent(null)}
+          onClose={handleCloseEditEvent}
           onSave={handleUpdateEvent}
         />
       )}
@@ -2857,7 +2132,7 @@ export default function App() {
         <ViewEvent
           event={viewingEvent}
           contacts={contacts}
-          onClose={() => setViewingEvent(null)}
+          onClose={handleCloseViewEvent}
           onAddAttendees={handleAddAttendees}
           onArchiveEvent={handleDeleteEvent}
         />
@@ -2866,7 +2141,7 @@ export default function App() {
       {/* Import Modal */}
       {showImport && (
         <ImportContact
-          onClose={() => setShowImport(false)}
+          onClose={handleCloseImport}
           onImport={handleImportContacts}
         />
       )}
@@ -2876,7 +2151,7 @@ export default function App() {
         <ExportContact
           contacts={contacts}
           selectedContacts={selectedContacts}
-          onClose={() => setShowExport(false)}
+          onClose={handleCloseExport}
         />
       )}
 
@@ -2884,7 +2159,7 @@ export default function App() {
         <ExportIncubatee
           incubatees={incubatees}
           selectedIncubatees={selectedIncubatees}
-          onClose={() => setShowIncubateeExport(false)}
+          onClose={handleCloseIncubateeExport}
         />
       )}
 
@@ -2893,20 +2168,17 @@ export default function App() {
           incubatees={incubatees}
           unassignedFounders={unassignedFounders}
           selectedFounders={selectedFounders}
-          onClose={() => setShowFounderExport(false)}
+          onClose={handleCloseFounderExport}
         />
       )}
 
       {showPersonalSettings && (
         <PersonalSettings
-          onClose={() => setShowPersonalSettings(false)}
+          onClose={handleClosePersonalSettings}
           userName={currentUserName}
           userEmail={currentUserEmail}
           hasExistingPassword={hasExistingPassword}
-          onPasswordUpdated={() => {
-            setHasExistingPassword(true);
-            localStorage.setItem('auth_method', 'password');
-          }}
+          onPasswordUpdated={handlePasswordUpdated}
         />
       )}
 
@@ -2932,10 +2204,7 @@ export default function App() {
             return saved;
           }}
           onSave={handleSaveIncubatee}
-          onClose={() => {
-            setShowIncubateeForm(false);
-            setEditingIncubatee(null);
-          }}
+          onClose={handleCloseIncubateeForm}
         />
       )}
 
@@ -2943,7 +2212,7 @@ export default function App() {
       {viewingIncubatee && (
         <ViewIncubatee
           incubatee={viewingIncubatee}
-          onClose={() => setViewingIncubatee(null)}
+          onClose={handleCloseViewIncubatee}
           onEdit={handleEditIncubatee}
         />
       )}
@@ -2953,7 +2222,7 @@ export default function App() {
         <ViewFounder
           founder={viewingFounder.founder}
           incubatee={viewingFounder.incubatee}
-          onClose={() => setViewingFounder(null)}
+          onClose={handleCloseViewFounder}
           onSave={handleSaveFounder}
         />
       )}
@@ -2966,7 +2235,7 @@ export default function App() {
             ...incubatees.flatMap((inc) => inc.founders.map((f) => ({ ...f, startupName: inc.startupName }))),
             ...unassignedFounders.map((f) => ({ ...f, startupName: '—' })),
           ]}
-          onClose={() => setShowAddFounderModal(false)}
+          onClose={handleCloseAddFounderModal}
           onSave={handleAddFounderToIncubatee}
           onLinkExisting={handleLinkFounderToIncubatee}
         />
@@ -2983,7 +2252,7 @@ export default function App() {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowDeleteFounderConfirm(false)}
+                onClick={handleCancelDeleteFounderConfirm}
                 className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
@@ -3011,7 +2280,7 @@ export default function App() {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowDeleteIncubateeConfirm(false)}
+                onClick={handleCancelDeleteIncubateeConfirm}
                 className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
@@ -3044,7 +2313,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                onClick={() => setActiveSummaryOverlay(null)}
+                onClick={handleCloseSummaryOverlay}
                 className="px-3 py-1.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Close
@@ -3084,36 +2353,14 @@ export default function App() {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={handleCancelDeleteConfirm}
                 className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  const contactsToArchive = contacts.filter((c) => selectedContacts.includes(c.id));
-                  
-                  // Update local state immediately
-                  setArchivedContacts((prev) => [...prev, ...contactsToArchive]);
-                  setContacts((prev) => prev.filter((c) => !selectedContacts.includes(c.id)));
-                  setSelectedContacts([]);
-                  setShowDeleteConfirm(false);
-                  
-                  // Soft delete in database
-                  setIsSyncing(true);
-                  try {
-                    for (const contact of contactsToArchive) {
-                      await deleteContactFromSupabase(contact.id);
-                    }
-                    console.log(`✅ Successfully archived ${contactsToArchive.length} contact(s) in database`);
-                  } catch (error) {
-                    console.error('❌ Failed to archive contacts in database:', error);
-                    setSyncError('Contacts archived locally but failed to update in database.');
-                  } finally {
-                    setIsSyncing(false);
-                  }
-                }}
+                onClick={handleConfirmArchiveContacts}
                 className="px-5 py-2.5 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
               >
                 Confirm
@@ -3129,7 +2376,7 @@ export default function App() {
         confirmLabel={dialog?.confirmLabel}
         cancelLabel={dialog?.cancelLabel}
         tone={dialog?.tone}
-        onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+        onConfirm={dialog?.onConfirm ?? handleCloseDialog}
         onCancel={dialog?.onCancel}
       />
     </div>

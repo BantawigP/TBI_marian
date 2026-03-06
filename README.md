@@ -98,5 +98,7 @@ npm run preview
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE` for details.
+This project is licensed under a custom company-restricted license.
+Full access is granted only to `MARIAN TBI`; other parties are allowed view-only access.
+See `LICENSE` for details.
 

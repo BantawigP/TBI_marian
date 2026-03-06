@@ -344,8 +344,6 @@ export async function grantAccess(
     );
 
     const rawText = await response.text();
-    console.log('Response status:', response.status);
-    console.log('Response body:', rawText);
     
     const result = rawText ? JSON.parse(rawText) : {};
 
@@ -398,7 +396,6 @@ export async function claimAccess(token: string): Promise<{ success: boolean; me
     );
 
     const rawText = await response.text();
-    console.log('Claim access response:', response.status, rawText);
     const result = rawText ? JSON.parse(rawText) : {};
 
     if (!response.ok) {

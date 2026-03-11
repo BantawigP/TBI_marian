@@ -1,0 +1,46 @@
+MARIAN TBI COMPANY-RESTRICTED LICENSE
+Version 1.0
+
+Copyright (c) 2026 Paul Bantawig and Ian Labonete
+
+1. Definitions
+"Software" means this project and all associated source code, assets, documentation,
+and derivative files.
+
+"Authorized Company" means MARIAN TBI.
+
+2. License Grant to Authorized Company
+Subject to this license, the Authorized Company is granted full rights to use,
+run, copy, modify, adapt, deploy, and maintain the Software for internal and
+official business purposes.
+
+3. Limited Rights for All Other Parties
+Any person or organization other than the Authorized Company is granted a
+read-only right to view the Software for reference, audit, or evaluation.
+
+All other rights are reserved. Without prior written permission from the
+copyright holders, non-authorized parties may not:
+- use the Software in production or operations,
+- execute or deploy the Software,
+- modify, adapt, or create derivative works,
+- copy, redistribute, sublicense, lease, or sell the Software,
+- use the Software for commercial or organizational operations.
+
+4. Ownership
+Ownership and all intellectual property rights remain with the copyright
+holders, except for the rights expressly granted to the Authorized Company.
+
+5. Termination
+Any use outside the scope of this license automatically terminates granted
+rights. Upon termination, unauthorized copies must be deleted immediately.
+
+6. Warranty Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of Liability
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

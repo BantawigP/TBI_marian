@@ -1,0 +1,1001 @@
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Users, Mail, Phone, Calendar, Search, Plus, Edit2, Trash2, Shield, UserCog, X, Key, ChevronDown } from 'lucide-react';
+import type { TeamMember, TeamRole } from '../../../types';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember, grantAccess } from '../services/teamService';
+import { supabase } from '../../../lib/supabaseClient';
+import { PopupDialog } from '../../shared/components/PopupDialog';
+
+interface TeamProps {
+  refreshToken?: number;
+  onArchived?: (member: TeamMember) => void;
+  currentUserRole?: TeamRole | null;
+  currentUserDepartment?: string | null;
+  isRoleLoading?: boolean;
+}
+
+export function Team({ refreshToken, onArchived, currentUserRole, currentUserDepartment, isRoleLoading }: TeamProps) {
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    tone?: 'primary' | 'danger' | 'neutral' | 'success';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
+  const [newMember, setNewMember] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'Member' as TeamRole,
+    department: '',
+    joinedDate: '',
+  });
+  const [departments, setDepartments] = useState<{ id: number; department_name: string }[]>([]);
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+  const [showEditDeptDropdown, setShowEditDeptDropdown] = useState(false);
+  const deptDropdownRef = useRef<HTMLDivElement>(null);
+  const editDeptDropdownRef = useRef<HTMLDivElement>(null);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    role: 'Member' as TeamRole,
+    department: '',
+  });
+
+  // Load team members on mount
+  useEffect(() => {
+    loadTeamMembers();
+  }, [refreshToken]);
+
+  // Load departments from database
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, department_name')
+        .order('department_name');
+      if (!error && data) {
+        setDepartments(data);
+      }
+    };
+    fetchDepartments();
+  }, []);
+
+  // Close department dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(event.target as Node)) {
+        setShowDeptDropdown(false);
+      }
+      if (editDeptDropdownRef.current && !editDeptDropdownRef.current.contains(event.target as Node)) {
+        setShowEditDeptDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const loadTeamMembers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('🔄 Team component: Loading team members...');
+      const data = await fetchTeamMembers();
+      console.log('✅ Team component: Loaded', data.length, 'members');
+      setTeamMembers(data);
+    } catch (err) {
+      console.error('❌ Team component: Error loading team members:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load team members. Please check the console for details.';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openConfirm = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel'>) =>
+    new Promise<boolean>((resolve) => {
+      setDialog({
+        ...config,
+        cancelLabel: config.cancelLabel ?? 'Cancel',
+        confirmLabel: config.confirmLabel ?? 'Confirm',
+        onConfirm: () => {
+          resolve(true);
+          setDialog(null);
+        },
+        onCancel: () => {
+          resolve(false);
+          setDialog(null);
+        },
+      });
+    });
+
+  const openAlert = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel' | 'cancelLabel'>) => {
+    setDialog({
+      ...config,
+      confirmLabel: config.confirmLabel ?? 'OK',
+      onConfirm: () => setDialog(null),
+    });
+  };
+
+  const handleAddMember = async () => {
+    if (!newMember.firstName || !newMember.lastName || !newMember.email) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const createdMember = await createTeamMember({
+        firstName: newMember.firstName,
+        lastName: newMember.lastName,
+        name: `${newMember.firstName} ${newMember.lastName}`,
+        email: newMember.email,
+        phone: newMember.phone || undefined,
+        role: newMember.role,
+        department: newMember.department || undefined,
+        joinedDate: newMember.joinedDate || new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
+        avatarColor: '#FF2B5E',
+      });
+
+      // Automatically send an access invitation email after adding the member
+      let emailNote = '';
+      try {
+        const inviteResult = await grantAccess(createdMember.id, createdMember.email, createdMember.role as 'Admin' | 'Manager' | 'Member');
+        if (inviteResult.warning) {
+          emailNote = `\n\nNote: ${inviteResult.warning}. Share the magic link manually if needed.`;
+        } else {
+          emailNote = `\n\nAn access invitation has been sent to ${createdMember.email}.`;
+        }
+      } catch (inviteErr) {
+        console.error('Failed to send invitation email:', inviteErr);
+        emailNote = `\n\nMember was added but the invitation email could not be sent. Use "Grant Access" to retry.`;
+      }
+
+      await loadTeamMembers();
+      openAlert({
+        title: 'Member added',
+        message: `Member added successfully, ${createdMember.lastName}, ${createdMember.firstName}.${emailNote}`,
+        tone: 'success',
+      });
+      setShowAddModal(false);
+      setNewMember({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        role: 'Member',
+        department: '',
+        joinedDate: '',
+      });
+    } catch (err) {
+      console.error('Error creating team member:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create team member';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMember = async (id: string, name: string) => {
+    const confirmed = await openConfirm({
+      title: 'Remove team member',
+      message: `Are you sure you want to remove ${name} from the team?`,
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    const archivedCandidate = teamMembers.find((m) => m.id === id);
+
+    try {
+      setLoading(true);
+      await deleteTeamMember(id);
+      await loadTeamMembers();
+
+      if (archivedCandidate && onArchived) {
+        onArchived(archivedCandidate);
+      }
+    } catch (err) {
+      console.error('Error deleting team member:', err);
+      setError('Failed to delete team member');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditModal = (member: TeamMember) => {
+    setEditingMember(member);
+    setEditForm({
+      firstName: member.firstName,
+      lastName: member.lastName,
+      phone: member.phone || '',
+      role: member.role,
+      department: member.department || '',
+    });
+  };
+
+  const handleEditMember = async () => {
+    if (!editingMember || !editForm.firstName || !editForm.lastName) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      await updateTeamMember(editingMember.id, {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        phone: editForm.phone || undefined,
+        role: editForm.role,
+        department: editForm.department || undefined,
+      });
+      await loadTeamMembers();
+      openAlert({
+        title: 'Member updated',
+        message: `${editForm.lastName}, ${editForm.firstName} has been updated successfully.`,
+        tone: 'success',
+      });
+      setEditingMember(null);
+    } catch (err) {
+      console.error('Error updating team member:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update team member';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGrantAccess = async (member: TeamMember) => {
+    if (member.role !== 'Admin' && member.role !== 'Manager' && member.role !== 'Member') {
+      setError('Only Admin, Manager, and Member roles can be granted access');
+      return;
+    }
+
+    // Enforce role-based grant rules
+    if (isRoleLoading) {
+      setError('Your role is still loading. Please wait a moment and try again.');
+      return;
+    }
+    if (!currentUserRole) {
+      setError('Unable to determine your role. Please refresh and try again.');
+      return;
+    }
+    if (currentUserRole === 'Member') {
+      setError('Members do not have permission to grant access.');
+      return;
+    }
+    if (currentUserRole === 'Manager' && member.role !== 'Member') {
+      setError('Managers can only grant access to Members.');
+      return;
+    }
+
+    const confirmed = await openConfirm({
+      title: member.hasAccess ? 'Resend access invitation' : 'Send access invitation',
+      message: member.hasAccess
+        ? `${member.lastName}, ${member.firstName} already has access but may not have received the email. Resend the invitation to ${member.email}?`
+        : `Send access invitation to ${member.lastName}, ${member.firstName} (${member.email})?`,
+      confirmLabel: member.hasAccess ? 'Resend invite' : 'Send invite',
+      tone: 'primary',
+    });
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await grantAccess(member.id, member.email, member.role);
+      
+      if (result.warning && result.actionLink) {
+        // Email couldn't be sent due to Resend limitations - show the link
+        const copyLink = await openConfirm({
+          title: 'Copy magic link?',
+          message: `${result.message}\n\nWould you like to copy the magic link to share manually?`,
+          confirmLabel: 'Copy link',
+          tone: 'primary',
+        });
+        if (copyLink) {
+          await navigator.clipboard.writeText(result.actionLink);
+          openAlert({
+            title: 'Magic link copied',
+            message: `Magic link copied to clipboard!\n\nShare this link with ${member.email}`,
+            tone: 'success',
+          });
+        }
+      } else {
+        openAlert({
+          title: 'Access invited',
+          message: `${result.message}\n\nA magic link has been sent to ${member.email}`,
+          tone: 'success',
+        });
+      }
+      await loadTeamMembers(); // Reload to update has_access status
+    } catch (err) {
+      console.error('Error granting access:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to grant access';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter team members based on role visibility
+  // Managers can only see members in their own department (not Admins)
+  const visibleMembers = currentUserRole === 'Manager'
+    ? teamMembers.filter((m) => m.role !== 'Admin' && m.department === currentUserDepartment)
+    : teamMembers;
+
+  // Filter team members
+  const filteredMembers = visibleMembers.filter((member) => {
+    const matchesSearch =
+      `${member.firstName} ${member.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (member.department || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = selectedRole === 'all' || member.role === selectedRole;
+    return matchesSearch && matchesRole;
+  });
+
+  // Calculate statistics
+  const totalMembers = visibleMembers.length;
+  const adminCount = visibleMembers.filter((m) => m.role === 'Admin').length;
+  const managerCount = visibleMembers.filter((m) => m.role === 'Manager').length;
+  const memberCount = visibleMembers.filter((m) => m.role === 'Member').length;
+
+  // Group by department
+  const departmentStats = visibleMembers.reduce((acc, member) => {
+    const dept = member.department || 'Unassigned';
+    acc[dept] = (acc[dept] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Role-based access control for granting access
+  // Admin can grant to Admin/Manager/Member; Manager can grant to Member only; Member cannot grant
+  const canGrantAccess = (targetMember: TeamMember): boolean => {
+    if (!currentUserRole) return false;
+    if (currentUserRole === 'Admin') {
+      return (
+        targetMember.role === 'Admin' ||
+        targetMember.role === 'Manager' ||
+        targetMember.role === 'Member'
+      );
+    }
+    if (currentUserRole === 'Manager') {
+      return targetMember.role === 'Member';
+    }
+    return false;
+  };
+
+  // Determine which roles the current user can assign
+  // While role is loading, or if unknown, show all — only admins can reach this page anyway
+  const getAssignableRoles = (): TeamRole[] => {
+    if (isRoleLoading || !currentUserRole) return ['Admin', 'Manager', 'Member'];
+    if (currentUserRole === 'Admin') return ['Admin', 'Manager', 'Member'];
+    if (currentUserRole === 'Manager') return ['Manager', 'Member'];
+    return ['Member'];
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'Admin':
+        return <Shield className="w-4 h-4" />;
+      case 'Manager':
+        return <UserCog className="w-4 h-4" />;
+      default:
+        return <Users className="w-4 h-4" />;
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'Admin':
+        return 'bg-purple-100 text-purple-700';
+      case 'Manager':
+        return 'bg-blue-100 text-blue-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          {error}
+          <button
+            onClick={() => setError(null)}
+            className="ml-2 underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl mb-2">Team Management</h1>
+          <p className="text-gray-600">Manage your team members and their roles</p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          disabled={loading}
+          className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50"
+        >
+          <Plus className="w-4 h-4" />
+          Add Member
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Total Members */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-[#FF2B5E]" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-900 mb-1">{totalMembers}</h3>
+          <p className="text-sm text-gray-600">Total Members</p>
+        </div>
+
+        {/* Admins - Only show for Admins */}
+        {currentUserRole === 'Admin' && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Shield className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-900 mb-1">{adminCount}</h3>
+          <p className="text-sm text-gray-600">Admins</p>
+        </div>
+        )}
+
+        {/* Managers */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <UserCog className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-900 mb-1">{managerCount}</h3>
+          <p className="text-sm text-gray-600">Managers</p>
+        </div>
+
+        {/* Members */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-gray-600" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-900 mb-1">{memberCount}</h3>
+          <p className="text-sm text-gray-600">Members</p>
+        </div>
+      </div>
+
+      {/* Search and Filter Bar */}
+      <div className="bg-white rounded-xl p-4 border border-gray-200">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name, email, or department..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E]"
+            />
+          </div>
+
+          {/* Role Filter */}
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/20 focus:border-[#FF2B5E] bg-white"
+          >
+            <option value="all">All Roles</option>
+            {currentUserRole === 'Admin' && <option value="Admin">Admin</option>}
+            <option value="Manager">Manager</option>
+            <option value="Member">Member</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Team Members Grid */}
+      {filteredMembers.length === 0 ? (
+        <div className="bg-white rounded-xl p-12 border border-gray-200 text-center">
+          <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No team members found</h3>
+          <p className="text-gray-600 mb-6">
+            {searchQuery || selectedRole !== 'all'
+              ? 'Try adjusting your search or filters'
+              : 'Get started by adding your first team member'}
+          </p>
+          {!searchQuery && selectedRole === 'all' && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add First Member
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredMembers.map((member) => (
+            <div
+              key={member.id}
+              className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+            >
+              {/* Card Header with Background */}
+              <div className="h-24 bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E]" />
+
+              {/* Card Content */}
+              <div className="p-6 -mt-12">
+                {/* Avatar */}
+                <div className="w-20 h-20 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center text-white font-semibold text-xl mb-4 bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E]">
+                  {member.firstName.charAt(0)}
+                  {member.lastName.charAt(0)}
+                </div>
+
+                {/* Member Info */}
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    {member.firstName} {member.lastName}
+                  </h3>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${getRoleColor(
+                        member.role
+                      )}`}
+                    >
+                      {getRoleIcon(member.role)}
+                      {member.role}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">{member.department}</p>
+                </div>
+
+                {/* Contact Details */}
+                <div className="space-y-2 mb-4 text-sm">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <span className="truncate">{member.email}</span>
+                  </div>
+                  {member.phone && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Phone className="w-4 h-4 text-gray-400" />
+                      <span>{member.phone}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span>Joined {member.joinedDate || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-4 border-t border-gray-100">
+                  {member.isLinked ? (
+                    // Member has logged in — their account is fully active
+                    <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
+                      <Key className="w-4 h-4" />
+                      Has Access
+                    </div>
+                  ) : member.hasAccess ? (
+                    // Invite was sent but member hasn't logged in yet
+                    canGrantAccess(member) ? (
+                      <button
+                        onClick={() => handleGrantAccess(member)}
+                        disabled={loading}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                      >
+                        <Key className="w-4 h-4" />
+                        Resend Access
+                      </button>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
+                        <Key className="w-4 h-4" />
+                        Has Access
+                      </div>
+                    )
+                  ) : (
+                    // Not yet invited
+                    <button
+                      onClick={() => handleGrantAccess(member)}
+                      disabled={loading}
+                      title="Send access invitation"
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Key className="w-4 h-4" />
+                      Grant Access
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => openEditModal(member)}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMember(member.id, `${member.lastName}, ${member.firstName}`)}
+                    disabled={loading}
+                    className="flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Departments Overview */}
+      {Object.keys(departmentStats).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-6">Team by Department</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(departmentStats).map(([department, count]) => (
+              <div
+                key={department}
+                className="bg-gray-50 rounded-lg p-4 border border-gray-100"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">{department}</span>
+                  <span className="text-2xl font-semibold text-[#FF2B5E]">{count}</span>
+                </div>
+                <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-[#FF2B5E] h-2 rounded-full transition-all"
+                    style={{
+                      width: `${(count / totalMembers) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add Member Modal */}
+      {showAddModal && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Add Team Member</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  value={newMember.firstName}
+                  onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value.replace(/[0-9]/g, '') })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter first name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  value={newMember.lastName}
+                  onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value.replace(/[0-9]/g, '') })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter last name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={newMember.email}
+                  onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="member@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">+63</span>
+                  <input
+                    type="tel"
+                    value={newMember.phone.replace(/^\+63\s?/, '')}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setNewMember({ ...newMember, phone: digits ? `+63${digits}` : '' });
+                    }}
+                    className="w-full pl-12 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="9XX XXX XXXX"
+                    maxLength={12}
+                  />
+                </div>
+              </div>
+
+              <div ref={deptDropdownRef} className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Department
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={newMember.department}
+                    onChange={(e) => {
+                      setNewMember({ ...newMember, department: e.target.value });
+                      setShowDeptDropdown(true);
+                    }}
+                    onFocus={() => setShowDeptDropdown(true)}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="Type or select department"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDeptDropdown(!showDeptDropdown)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                    title="Select department"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showDeptDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {departments
+                      .filter((dept) =>
+                        dept.department_name.toLowerCase().includes(newMember.department.toLowerCase())
+                      )
+                      .map((dept) => (
+                        <button
+                          key={dept.id}
+                          type="button"
+                          onClick={() => {
+                            setNewMember({ ...newMember, department: dept.department_name });
+                            setShowDeptDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                        >
+                          {dept.department_name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Role *
+                </label>
+                <select
+                  value={newMember.role}
+                  onChange={(e) => setNewMember({ ...newMember, role: e.target.value as TeamRole })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                >
+                  {getAssignableRoles().map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddMember}
+                disabled={!newMember.firstName || !newMember.lastName || !newMember.email || loading}
+                className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6265A] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Add Member
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {/* Edit Member Modal */}
+      {editingMember && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Team Member</h2>
+              <button
+                onClick={() => setEditingMember(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  value={editForm.firstName}
+                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value.replace(/[0-9]/g, '') })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter first name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  value={editForm.lastName}
+                  onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value.replace(/[0-9]/g, '') })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                  placeholder="Enter last name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editingMember.email}
+                  disabled
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-400">Email cannot be changed</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">+63</span>
+                  <input
+                    type="tel"
+                    value={editForm.phone.replace(/^\+63\s?/, '')}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setEditForm({ ...editForm, phone: digits ? `+63${digits}` : '' });
+                    }}
+                    className="w-full pl-12 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="9XX XXX XXXX"
+                    maxLength={12}
+                  />
+                </div>
+              </div>
+
+              <div ref={editDeptDropdownRef} className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Department
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editForm.department}
+                    onChange={(e) => {
+                      setEditForm({ ...editForm, department: e.target.value });
+                      setShowEditDeptDropdown(true);
+                    }}
+                    onFocus={() => setShowEditDeptDropdown(true)}
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                    placeholder="Type or select department"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditDeptDropdown(!showEditDeptDropdown)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-[#FF2B5E] hover:bg-gray-100 rounded transition-colors"
+                    title="Select department"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showEditDeptDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {departments
+                      .filter((dept) =>
+                        dept.department_name.toLowerCase().includes(editForm.department.toLowerCase())
+                      )
+                      .map((dept) => (
+                        <button
+                          key={dept.id}
+                          type="button"
+                          onClick={() => {
+                            setEditForm({ ...editForm, department: dept.department_name });
+                            setShowEditDeptDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-[#FF2B5E]/10 transition-colors border-b border-gray-100 last:border-b-0 text-sm text-gray-700 hover:text-[#FF2B5E]"
+                        >
+                          {dept.department_name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Role *
+                </label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value as TeamRole })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent"
+                >
+                  {getAssignableRoles().map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setEditingMember(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditMember}
+                disabled={!editForm.firstName || !editForm.lastName || loading}
+                className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6265A] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <PopupDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        confirmLabel={dialog?.confirmLabel}
+        cancelLabel={dialog?.cancelLabel}
+        tone={dialog?.tone}
+        onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+        onCancel={dialog?.onCancel}
+      />
+    </div>
+  );
+}

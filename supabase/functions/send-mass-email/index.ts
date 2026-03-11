@@ -37,6 +37,7 @@ const BATCH_DELAY_MS = 1800;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+<<<<<<< HEAD
 const renderEmailHtml = (event: EventPayload) => {
 
   return `
@@ -60,6 +61,81 @@ const renderEmailHtml = (event: EventPayload) => {
   `;
 };
 
+=======
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const normalizeLineBreaks = (value: string) => value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+
+const renderEmailHtml = (event: EventPayload) => {
+  const safeTitle = escapeHtml(event.title);
+  const safeDescription = event.description ? escapeHtml(normalizeLineBreaks(event.description)) : "";
+
+  return `
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f9fafb;padding:32px 0;font-family:Arial,Helvetica,sans-serif;">
+  <tr>
+    <td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;">
+        <tr>
+          <td style="padding:0;">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:linear-gradient(135deg,#FF2B5E,#FF6B8E);">
+              <tr>
+                <td style="padding:28px 28px 24px 28px;">
+                  <p style="margin:0 0 4px 0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">MARIAN TBI Connect</p>
+                  <h1 style="margin:0;font-size:22px;color:#ffffff;font-weight:700;">${safeTitle}</h1>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;">
+            ${safeDescription ? `<p style="margin:0 0 24px 0;font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap;">${safeDescription}</p>` : ""}
+
+            <p style="margin:0;font-size:13px;color:#9ca3af;">Best regards,<br /><strong style="color:#374151;">MARIAN TBI Connect Team</strong></p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
+              © 2026 MARIAN TBI Connect · University of the Immaculate Conception<br />
+              This is an automated email. Please do not reply to this email.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+  `;
+};
+
+const renderEmailText = (event: EventPayload) => {
+  const eventDescription = event.description ? normalizeLineBreaks(event.description) : "";
+
+  return `
+MARIAN TBI Connect
+
+${event.title}
+
+Hello everyone,
+
+${eventDescription ? `\n${eventDescription}\n` : ""}
+
+Best regards,
+MARIAN TBI Connect Team
+
+© 2026 MARIAN TBI Connect · University of the Immaculate Conception
+This is an automated email. Please do not reply to this email.
+`.trim();
+};
+
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { ...corsHeaders } });
@@ -105,7 +181,11 @@ serve(async (req: Request) => {
 
     const [primaryRecipient, ...ccRecipients] = batchEmails;
     const html = renderEmailHtml(payload.event);
+<<<<<<< HEAD
     const text = `${payload.event.title}\n\n${payload.event.description || ""}`;
+=======
+    const text = renderEmailText(payload.event);
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -116,7 +196,11 @@ serve(async (req: Request) => {
       body: JSON.stringify({
         to: primaryRecipient,
         cc: ccRecipients.length > 0 ? ccRecipients : undefined,
+<<<<<<< HEAD
         subject: `Update: ${payload.event.title}`,
+=======
+        subject: payload.event.title,
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         from: DEFAULT_FROM,
         html,
         text,

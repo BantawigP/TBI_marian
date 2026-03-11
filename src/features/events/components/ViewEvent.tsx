@@ -1,0 +1,390 @@
+import { X, Calendar, Clock, MapPin, Users, Mail, UserPlus, Archive } from 'lucide-react';
+import { useState } from 'react';
+import type { Contact, Event, RsvpStatus } from '../../../types';
+
+interface ViewEventProps {
+	event: Event;
+	contacts: Contact[];
+	onClose: () => void;
+	onAddAttendees: (eventId: string, attendees: Contact[]) => void;
+	onArchiveEvent?: (eventId: string) => void;
+}
+
+export function ViewEvent({ event, contacts, onClose, onAddAttendees, onArchiveEvent }: ViewEventProps) {
+	const [showAddAttendees, setShowAddAttendees] = useState(false);
+	const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
+	const [searchQuery, setSearchQuery] = useState('');
+	const parsedEventDate = event.date?.trim() ? new Date(event.date) : null;
+	const isPastEvent = parsedEventDate ? parsedEventDate < new Date() : false;
+	const isMassEmailOnlyEvent =
+		!event.date?.trim() && !event.time?.trim() && !event.location?.trim();
+
+	const formatDate = (dateStr: string) => {
+		if (!dateStr?.trim()) return 'Mass Email Only';
+		const date = new Date(dateStr);
+		if (Number.isNaN(date.getTime())) return 'Mass Email Only';
+		return date.toLocaleDateString('en-US', {
+			weekday: 'long',
+			month: 'long',
+			day: 'numeric',
+			year: 'numeric',
+		});
+	};
+
+	const formatTime = (timeStr: string) => {
+		if (!timeStr?.trim()) return 'No set time';
+		const [hours, minutes] = timeStr.split(':');
+		const hour = parseInt(hours);
+		if (Number.isNaN(hour) || !minutes) return 'No set time';
+		const ampm = hour >= 12 ? 'PM' : 'AM';
+		const displayHour = hour % 12 || 12;
+		return `${displayHour}:${minutes} ${ampm}`;
+	};
+
+	const renderStatusBadge = (status: RsvpStatus | undefined) => {
+		const normalized = status ?? 'pending';
+		const palette: Record<RsvpStatus, string> = {
+			going: 'bg-green-100 text-green-700 border-green-200',
+			not_going: 'bg-red-100 text-red-700 border-red-200',
+			pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+		};
+		const label: Record<RsvpStatus, string> = {
+			going: 'Will participate',
+			not_going: 'Will not participate',
+			pending: 'Pending reply',
+		};
+
+		return (
+			<span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${palette[normalized]}`}>
+				<span className={`w-2 h-2 rounded-full ${
+					normalized === 'going' ? 'bg-green-500' : normalized === 'not_going' ? 'bg-red-500' : 'bg-yellow-500'
+				}`} />
+				{label[normalized]}
+			</span>
+		);
+	};
+
+	const renderAlumniTypeBadge = (alumniType?: string) => {
+		if (!alumniType) return null;
+		const isMarianGrad = alumniType === 'marian_graduate';
+		return (
+			<span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+				isMarianGrad
+					? 'bg-purple-100 text-purple-700 border border-purple-200'
+					: 'bg-blue-100 text-blue-700 border border-blue-200'
+			}`}>
+				{isMarianGrad ? 'MARIAN Graduate' : 'Graduate'}
+			</span>
+		);
+	};
+
+	const renderVerificationBadge = (status: Contact['status']) => {
+		const isVerified = status === 'Verified';
+		return (
+			<span
+				className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+					isVerified
+						? 'bg-green-100 text-green-700 border-green-200'
+						: 'bg-yellow-100 text-yellow-700 border-yellow-200'
+				}`}
+			>
+				{status}
+			</span>
+		);
+	};
+
+	const contactedPeople = contacts.filter(
+		(c) =>
+			!event.attendees.some((a) => a.id === c.id)
+	);
+
+	const filteredContacts = contactedPeople.filter((contact) =>
+		contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+		contact.email.toLowerCase().includes(searchQuery.toLowerCase())
+	);
+
+	const toggleAttendee = (contactId: string) => {
+		setSelectedAttendees((prev) =>
+			prev.includes(contactId)
+				? prev.filter((id) => id !== contactId)
+				: [...prev, contactId]
+		);
+	};
+
+	const toggleExclusiveSelection = (targetIds: string[]) => {
+		const uniqueTargetIds = Array.from(new Set(targetIds));
+		const isSameSelection =
+			selectedAttendees.length === uniqueTargetIds.length &&
+			uniqueTargetIds.every((id) => selectedAttendees.includes(id));
+
+		setSelectedAttendees(isSameSelection ? [] : uniqueTargetIds);
+	};
+
+	const selectAllAttendees = () => {
+		toggleExclusiveSelection(contactedPeople.map((contact) => contact.id));
+	};
+
+	const selectVerifiedAttendees = () => {
+		toggleExclusiveSelection(
+			contactedPeople
+				.filter((contact) => contact.status === 'Verified')
+				.map((contact) => contact.id)
+		);
+	};
+
+	const selectUnverifiedAttendees = () => {
+		toggleExclusiveSelection(
+			contactedPeople
+				.filter((contact) => contact.status === 'Unverified')
+				.map((contact) => contact.id)
+		);
+	};
+
+	const handleAddAttendees = () => {
+		const newAttendees = contactedPeople
+			.filter((c) => selectedAttendees.includes(c.id))
+			.map((c) => ({ ...c, rsvpStatus: 'pending' as const }));
+		onAddAttendees(event.id, newAttendees);
+		setShowAddAttendees(false);
+		setSelectedAttendees([]);
+		setSearchQuery('');
+	};
+
+	return (
+		<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+			<div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+				<div className="flex items-center justify-between p-6 border-b border-gray-200">
+					<h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
+					<div className="flex items-center gap-2">
+						{isPastEvent && onArchiveEvent && (
+							<button
+								onClick={() => onArchiveEvent(event.id)}
+								className="flex items-center gap-2 text-sm bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+								title="Move this event to archives"
+							>
+								<Archive className="w-4 h-4" />
+								Archive Event
+							</button>
+						)}
+						<button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2">
+							<X className="w-5 h-5" />
+						</button>
+					</div>
+				</div>
+
+				<div className="flex-1 overflow-y-auto p-6">
+					<div className="max-w-5xl mx-auto space-y-6">
+						<div className="space-y-3">
+							<h1 className="text-2xl font-semibold text-gray-900 mb-2">
+								{event.title}
+							</h1>
+							<p className="text-gray-600 mb-4">{event.description}</p>
+
+							<div className="space-y-3">
+								<div className="flex items-center gap-3 text-gray-700">
+									<div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+										<Calendar className="w-5 h-5 text-[#FF2B5E]" />
+									</div>
+									<div>
+										<p className="text-xs text-gray-500">Date</p>
+										<p className="text-sm font-medium">{formatDate(event.date)}</p>
+									</div>
+								</div>
+
+								<div className="flex items-center gap-3 text-gray-700">
+									<div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+										<Clock className="w-5 h-5 text-[#FF2B5E]" />
+									</div>
+									<div>
+										<p className="text-xs text-gray-500">Time</p>
+										<p className="text-sm font-medium">{formatTime(event.time)}</p>
+									</div>
+								</div>
+
+								<div className="flex items-center gap-3 text-gray-700">
+									<div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+										<MapPin className="w-5 h-5 text-[#FF2B5E]" />
+									</div>
+									<div>
+										<p className="text-xs text-gray-500">Location</p>
+										<p className="text-sm font-medium">{event.location?.trim() || 'No set location'}</p>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div className="border-t border-gray-200 pt-6">
+							<div className="flex items-center justify-between mb-4">
+								<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+									<Users className="w-5 h-5 text-[#FF2B5E]" />
+									{isMassEmailOnlyEvent ? 'Recipients' : 'Attendees'} ({event.attendees.length})
+								</h3>
+								<button
+									onClick={() => setShowAddAttendees(!showAddAttendees)}
+									className="flex items-center gap-2 text-sm bg-[#FF2B5E] text-white px-4 py-2 rounded-lg hover:bg-[#E6275A] transition-colors"
+								>
+									<UserPlus className="w-4 h-4" />
+									{isMassEmailOnlyEvent ? 'Add Recipients' : 'Add Attendees'}
+								</button>
+							</div>
+
+							{!isMassEmailOnlyEvent && (
+								<div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 mb-4">
+									<span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" /> Will participate</span>
+									<span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Pending invitation</span>
+									<span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Will not participate</span>
+									<span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-purple-400" /> MARIAN Graduate</span>
+									<span className="inline-flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> Graduate</span>
+								</div>
+							)}
+
+							{showAddAttendees && (
+								<div className="mb-6 bg-gray-50 rounded-xl p-4 border border-gray-200">
+									<h4 className="text-sm font-medium text-gray-900 mb-3">
+										{isMassEmailOnlyEvent ? 'Select Recipients to Add' : 'Select Contacts to Add'}
+									</h4>
+									<input
+										type="text"
+										placeholder="Search contacts..."
+										value={searchQuery}
+										onChange={(e) => setSearchQuery(e.target.value)}
+										className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2B5E] focus:border-transparent mb-3"
+									/>
+									<div className="flex flex-wrap gap-2 mb-3">
+										<button
+											type="button"
+											onClick={selectAllAttendees}
+											className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+										>
+											Select All
+										</button>
+										<button
+											type="button"
+											onClick={selectVerifiedAttendees}
+											className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+										>
+											Select Verified Only
+										</button>
+										<button
+											type="button"
+											onClick={selectUnverifiedAttendees}
+											className="px-3 py-1.5 text-xs bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+										>
+											Select Unverified Only
+										</button>
+									</div>
+									<div className="max-h-60 overflow-y-auto space-y-2 mb-3">
+										{filteredContacts.length > 0 ? (
+											filteredContacts.map((contact) => (
+												<label
+													key={contact.id}
+													className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-200 hover:border-[#FF2B5E] cursor-pointer transition-colors"
+												>
+													<input
+														type="checkbox"
+														checked={selectedAttendees.includes(contact.id)}
+														onChange={() => toggleAttendee(contact.id)}
+														className="w-4 h-4 rounded border-gray-300 text-[#FF2B5E] focus:ring-[#FF2B5E]"
+													/>
+													<div className="flex items-center gap-2 flex-1">
+														<div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white text-xs">
+															{contact.firstName.charAt(0)}
+															{contact.lastName.charAt(0)}
+														</div>
+														<div className="flex-1 min-w-0">
+															<p className="text-sm font-medium text-gray-900 truncate">
+																{contact.name}
+															</p>
+															<p className="text-xs text-gray-600 truncate">
+																{contact.email}
+															</p>
+														</div>
+														<div className="shrink-0">
+															{renderVerificationBadge(contact.status)}
+														</div>
+													</div>
+												</label>
+											))
+										) : (
+											<p className="text-sm text-gray-500 text-center py-4">
+												No contacts available to add
+											</p>
+										)}
+									</div>
+									<div className="flex gap-2">
+										<button
+											onClick={() => {
+												setShowAddAttendees(false);
+												setSelectedAttendees([]);
+												setSearchQuery('');
+											}}
+											className="flex-1 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+										>
+											Cancel
+										</button>
+										<button
+											onClick={() => {
+												handleAddAttendees();
+											}}
+											disabled={selectedAttendees.length === 0}
+											className="flex-1 px-4 py-2 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+										>
+											{isMassEmailOnlyEvent ? 'Add Recipients' : 'Add'} ({selectedAttendees.length})
+										</button>
+									</div>
+								</div>
+							)}
+
+							<div className="space-y-3">
+								{event.attendees.length > 0 ? (
+									event.attendees.map((attendee) => (
+										<div
+											key={attendee.id}
+											className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+										>
+											<div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FF2B5E] to-[#FF6B8E] flex items-center justify-center text-white">
+												{attendee.firstName.charAt(0)}
+												{attendee.lastName.charAt(0)}
+											</div>
+											<div className="flex-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+												<div>
+													<p className="font-medium text-gray-900">
+														{attendee.firstName} {attendee.lastName}
+													</p>
+													<p className="text-sm text-gray-600 flex items-center gap-1">
+														<Mail className="w-3 h-3" />
+														{attendee.email}
+													</p>
+												</div>
+												{!isMassEmailOnlyEvent ? (
+													<div className="sm:ml-4 flex items-center gap-2">
+														{renderAlumniTypeBadge(attendee.alumniType)}
+														{renderStatusBadge(attendee.rsvpStatus)}
+													</div>
+												) : null}
+											</div>
+										</div>
+									))
+								) : (
+									<div className="text-center py-8 text-gray-500">
+										<Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+										<p className="text-sm">{isMassEmailOnlyEvent ? 'No recipients yet' : 'No attendees yet'}</p>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+					<button
+						onClick={onClose}
+						className="px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+					>
+						Close
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}

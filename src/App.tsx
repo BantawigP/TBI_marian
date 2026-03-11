@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useEffect, useRef, useState } from 'react';
 import { Login } from './components/Login';
 import { ClaimAccess } from './components/ClaimAccess';
@@ -40,6 +41,56 @@ import {
 } from './lib/teamService';
 import { linkMyAccountToTeam } from './lib/linkAccountService';
 import { setCachedSession, clearCachedSession } from './lib/sessionCache';
+=======
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Login, ClaimAccess, PersonalSettings, sendVerificationEmail } from './features/auth';
+import { Sidebar, PopupDialog, FormPreview } from './features/shared';
+import { Home } from './features/home';
+import { Events } from './features/events/components/Events';
+import { Archives } from './features/archives';
+import { CreateEvent } from './features/events/components/CreateEvent';
+import { EditEvent } from './features/events/components/EditEvent';
+import { ViewEvent } from './features/events/components/ViewEvent';
+import { ContactsTable } from './features/contacts/components/ContactsTable';
+import { ContactForm } from './features/contacts/components/ContactForm';
+import { ViewContact } from './features/contacts/components/ViewContact';
+import { ImportContact } from './features/contacts/components/ImportContact';
+import { ExportContact } from './features/contacts/components/ExportContact';
+import { ExportIncubatee, ExportFounder, Incubatee, Founder, IncubateeCards, IncubateeForm, ViewIncubatee, ViewFounder, AddFounderModal, FoundersTable } from './features/incubatees';
+import { SearchBar } from './features/contacts/components/SearchBar';
+import { Team } from './features/team/components/Team';
+import { Plus, Upload, Download, Trash2, LayoutGrid, List, Lightbulb, Building2, Layers3, Tags, Users, Search } from 'lucide-react';
+import type { Contact, ContactStatus, Event, RsvpStatus, TeamMember, TeamRole } from './types';
+import { supabase } from './lib/supabaseClient';
+import { sendEventInvites } from './features/events/services/eventInviteService';
+import { deleteEventPermanently } from './features/events/services/eventService';
+import {
+  fetchArchivedTeamMembers,
+} from './features/team/services/teamService';
+import { useAuthSessionSync } from './features/auth/hooks/useAuthSessionSync';
+import { useAuthActions } from './features/auth/hooks/useAuthActions';
+import { useAuthUiActions } from './features/auth/hooks/useAuthUiActions';
+import { MemberRouteGuard } from './features/team/components/MemberRouteGuard';
+import { useTeamArchiveActions } from './features/team/hooks/useTeamArchiveActions';
+import { useArchiveActions } from './features/archives/hooks/useArchiveActions';
+import { useEventActions } from './features/events/hooks/useEventActions';
+import { useEventArchiveActions } from './features/events/hooks/useEventArchiveActions';
+import { useContactFormActions } from './features/contacts/hooks/useContactFormActions';
+import { useContactListActions } from './features/contacts/hooks/useContactListActions';
+import { useContactStatusActions } from './features/contacts/hooks/useContactStatusActions';
+import { useContactArchiveActions } from './features/contacts/hooks/useContactArchiveActions';
+import { useFilteredContacts } from './features/contacts/hooks/useFilteredContacts';
+import { useContactUiStateActions } from './features/contacts/hooks/useContactUiStateActions';
+import { useContactModalActions } from './features/contacts/hooks/useContactModalActions';
+import { useEventModalActions } from './features/events/hooks/useEventModalActions';
+import { useIncubateeArchiveActions } from './features/incubatees/hooks/useIncubateeArchiveActions';
+import { useFounderArchiveActions } from './features/incubatees/hooks/useFounderArchiveActions';
+import { useIncubateeModalActions } from './features/incubatees/hooks/useIncubateeModalActions';
+import { useIncubateeConfirmActions } from './features/incubatees/hooks/useIncubateeConfirmActions';
+import { useIncubateeUiActions } from './features/incubatees/hooks/useIncubateeUiActions';
+import { useFounderTableActions } from './features/incubatees/hooks/useFounderTableActions';
+import { resolveCurrentUserRoleContext } from './features/team/services/currentUserRoleService';
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 import {
   fetchIncubatees as fetchIncubateesFromSupabase,
   fetchUnassignedFounders as fetchUnassignedFoundersFromSupabase,
@@ -57,12 +108,22 @@ import {
   deleteFounders as deleteFoundersFromSupabase,
   unassignFounders as unassignFoundersInDb,
   linkFounderToIncubatee as linkFounderToIncubateeInDb,
+<<<<<<< HEAD
 } from './lib/incubateeService';
 import type { CohortLevelOption, StatusOption } from './lib/incubateeService';
 
 // Mock contacts - these will be replaced by database contacts after login
 const initialContacts: Contact[] = [];
 const defaultStatus: ContactStatus = 'Verified';
+=======
+} from './features/incubatees/services/incubateeService';
+import type { CohortLevelOption, StatusOption } from './features/incubatees/services/incubateeService';
+import { mapEventRowToEvent } from './features/events/mappers/eventMappers';
+import { mapContactRowToContact } from './features/contacts/mappers/contactMappers';
+
+// Mock contacts - these will be replaced by database contacts after login
+const initialContacts: Contact[] = [];
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
 const numberOrNull = (value: string | number | undefined | null) => {
   const parsed = Number(value);
@@ -165,6 +226,7 @@ const ensureEmailId = async (email?: string, status?: ContactStatus): Promise<nu
   return inserted?.email_id ?? null;
 };
 
+<<<<<<< HEAD
 const mapContactRowToContact = (row: Record<string, any>): Contact => {
   const firstName = row.f_name ?? row.F_name ?? row.first_name ?? row.firstName ?? '';
   const lastName = row.l_name ?? row.L_name ?? row.last_name ?? row.lastName ?? '';
@@ -261,6 +323,8 @@ const mapEventRowToEvent = (row: Record<string, any>): Event => {
   };
 };
 
+=======
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 const CONTACT_SELECT_BASE_FULL =
   'alumni_id,f_name,l_name,date_graduated,email_id,contact_number,alumni_type_id,alumni_types(id,name),college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)';
 const CONTACT_SELECT_BASE_NO_TYPES =
@@ -291,6 +355,7 @@ const noteMissingEventRsvpStatus = () => {
   console.warn('Supabase: event_participants.rsvp_status column missing, continuing without RSVP status.');
 };
 
+<<<<<<< HEAD
 const deriveUserProfile = (user?: any) => {
   if (!user) {
     return { name: '', email: '' };
@@ -311,6 +376,8 @@ const deriveUserProfile = (user?: any) => {
   return { name, email };
 };
 
+=======
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 const baseContactSelect = () =>
   supportsAlumniTypes ? CONTACT_SELECT_BASE_FULL : CONTACT_SELECT_BASE_NO_TYPES;
 
@@ -523,6 +590,7 @@ export default function App() {
   const [showIncubateeExport, setShowIncubateeExport] = useState(false);
   const [showFounderExport, setShowFounderExport] = useState(false);
   const [showDeleteFounderConfirm, setShowDeleteFounderConfirm] = useState(false);
+<<<<<<< HEAD
   const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
   // Check if URL contains claim-access token
@@ -652,10 +720,72 @@ export default function App() {
       subscription?.subscription.unsubscribe();
     };
   }, []);
+=======
+  const [startupSortBy, setStartupSortBy] = useState<'cohort' | 'status' | 'alphabetical'>('cohort');
+  const [founderSortBy, setFounderSortBy] = useState<'roles' | 'name' | 'startup'>('name');
+  const [incubateeSearchQuery, setIncubateeSearchQuery] = useState('');
+  const [activeSummaryOverlay, setActiveSummaryOverlay] = useState<'cohort' | 'status' | null>(null);
+  const [hasExistingPassword, setHasExistingPassword] = useState(false);
+
+  useAuthSessionSync({
+    setShowClaimAccess,
+    setIsLoggedIn,
+    setCurrentUserName,
+    setCurrentUserEmail,
+    setSyncError,
+    cachedSessionRef,
+  });
+
+  const { handleLogin, handleLogout } = useAuthActions({
+    cachedSessionRef,
+    setIsLoggedIn,
+    setActiveTab,
+    setShowForm,
+    setEditingContact,
+    setViewingContact,
+    setShowImport,
+    setShowExport,
+    setSelectedContacts,
+    setShowCreateEvent,
+    setViewingEvent,
+    setShowDeleteConfirm,
+    setShowPersonalSettings,
+    setCurrentUserName,
+    setCurrentUserEmail,
+    setHasExistingPassword,
+    setIncubatees,
+    setUnassignedFounders,
+    setSelectedIncubatees,
+    setShowIncubateeForm,
+    setEditingIncubatee,
+    setViewingIncubatee,
+    setViewingFounder,
+    setShowAddFounderModal,
+    setShowDeleteIncubateeConfirm,
+    setShowIncubateeExport,
+    setShowFounderExport,
+    setSearchQuery,
+    setGraduatedFrom,
+    setGraduatedTo,
+    setStatusFilter,
+  });
+
+  const {
+    handleRestoreTeamMember,
+    handlePermanentDeleteTeamMember,
+    handleArchiveTeamMemberLocal,
+  } = useTeamArchiveActions({
+    setIsSyncing,
+    setSyncError,
+    setArchivedTeamMembers,
+    setTeamRefreshToken,
+  });
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
   const fetchCurrentUserRole = async () => {
     setIsRoleLoading(true);
     try {
+<<<<<<< HEAD
       // Try getUser first; fall back to session user (avoids AuthSessionMissingError on OAuth).
       // getUser() makes a network call to validate the token — it throws
       // AuthSessionMissingError when the OAuth session hasn't fully committed to
@@ -1484,6 +1614,1007 @@ export default function App() {
     setGraduatedTo('');
     setStatusFilter('all');
     setSelectedContacts([]);
+=======
+      const resolved = await resolveCurrentUserRoleContext({
+        cachedSession: cachedSessionRef.current,
+        fallbackName: currentUserName,
+        fallbackEmail: currentUserEmail,
+      });
+
+      setCurrentUserRole(resolved.role);
+      setCurrentUserDepartment(resolved.department);
+      setCurrentUserName(resolved.userName);
+      setCurrentUserEmail(resolved.userEmail);
+      setHasExistingPassword(resolved.hasExistingPassword);
+    } finally {
+      setIsRoleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setCurrentUserRole(null);
+      return;
+    }
+
+    // Fix the URL after a Google OAuth callback without a page reload
+    if (window.location.pathname === '/auth/callback') {
+      window.history.replaceState({}, '', '/');
+    }
+
+    fetchCurrentUserRole();
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (currentUserRole === 'Member' && activeTab === 'team') {
+      setActiveTab('home');
+    }
+  }, [activeTab, currentUserRole]);
+
+  const openConfirm = (config: Omit<NonNullable<typeof dialog>, 'onConfirm' | 'onCancel'>) =>
+    new Promise<boolean>((resolve) => {
+      setDialog({
+        ...config,
+        cancelLabel: config.cancelLabel ?? 'Cancel',
+        confirmLabel: config.confirmLabel ?? 'Confirm',
+        onConfirm: () => {
+          resolve(true);
+          setDialog(null);
+        },
+        onCancel: () => {
+          resolve(false);
+          setDialog(null);
+        },
+      });
+    });
+
+  const isMemberPath = window.location.pathname === '/member';
+
+  const fetchContactsFromSupabase = async (): Promise<Contact[]> => {
+    let { data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null');
+
+    if (error && (error.code === '42703' || error.message?.includes('alumni_types'))) {
+      if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
+      ({ data, error } = await supabase.from('alumni').select(getContactSelect()).or('is_active.eq.true,is_active.is.null'));
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    const contacts = (data ?? []).map(mapContactRowToContact);
+    return hydrateContactsWithAddresses(contacts);
+  };
+
+  const fetchArchivedContactsFromSupabase = async (): Promise<Contact[]> => {
+    let { data, error } = await supabase.from('alumni').select(getContactSelect()).eq('is_active', false);
+
+    if (error && (error.code === '42703' || error.message?.includes('alumni_types'))) {
+      if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
+      ({ data, error } = await supabase.from('alumni').select(getContactSelect()).eq('is_active', false));
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    const contacts = (data ?? []).map(mapContactRowToContact);
+    return hydrateContactsWithAddresses(contacts);
+  };
+
+  function eventAlumniFields() {
+    const typeJoin = supportsAlumniTypes ? 'alumni_type_id,alumni_types(id,name),' : 'alumni_type_id,';
+    return supportsAlumniAddressColumn
+      ? `alumni_id,alumniaddress_id,f_name,l_name,email_id,date_graduated,contact_number,${typeJoin}college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)`
+      : `alumni_id,f_name,l_name,email_id,date_graduated,contact_number,${typeJoin}college_id,program_id,company_id,occupation_id,colleges(college_id,college_name),programs(program_id,program_name),companies(company_id,company_name),occupations(occupation_id,occupation_title),email_address(email_id,email,status)`;
+  }
+
+  function eventParticipantsSelect() {
+    return supportsEventRsvpStatus
+      ? `event_participants(rsvp_status,alumni:alumni_id(${eventAlumniFields()}))`
+      : `event_participants(alumni:alumni_id(${eventAlumniFields()}))`;
+  }
+
+  const fetchEventsFromSupabase = async (): Promise<Event[]> => {
+    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
+    let { data, error } = await supabase.from('events').select(selectClause).or('is_active.eq.true,is_active.is.null');
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status') || error.message?.includes('alumni_types'))) {
+      if (error.message?.includes('rsvp_status')) {
+        noteMissingEventRsvpStatus();
+        supportsEventRsvpStatus = false;
+      } else if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
+
+      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
+      ({ data, error } = await supabase.from('events').select(fallbackSelect).or('is_active.eq.true,is_active.is.null'));
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map((row) => mapEventRowToEvent(row, mapContactRowToContact));
+  };
+
+  const fetchArchivedEventsFromSupabase = async (): Promise<Event[]> => {
+    const selectClause = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
+    let { data, error } = await supabase.from('events').select(selectClause).eq('is_active', false);
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('rsvp_status') || error.message?.includes('alumni_types'))) {
+      if (error.message?.includes('rsvp_status')) {
+        noteMissingEventRsvpStatus();
+        supportsEventRsvpStatus = false;
+      } else if (error.message?.includes('alumni_types')) {
+        noteMissingAlumniTypes();
+        supportsAlumniTypes = false;
+      } else {
+        noteMissingAlumniAddressColumn();
+        supportsAlumniAddressColumn = false;
+      }
+
+      const fallbackSelect = `event_id,title,description,event_date,event_time,location_id,is_active,locations(location_id,name,city,country),${eventParticipantsSelect()}`;
+      ({ data, error } = await supabase.from('events').select(fallbackSelect).eq('is_active', false));
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map((row) => mapEventRowToEvent(row, mapContactRowToContact));
+  };
+
+  const fetchArchivedTeamMembersFromSupabase = async (): Promise<TeamMember[]> => {
+    const data = await fetchArchivedTeamMembers();
+    return data;
+  };
+
+  const persistContactToSupabase = async (contact: Contact): Promise<Contact> => {
+    const [collegeId, programId, companyId, occupationId, locationId, emailId] = await Promise.all([
+      ensureIdByName('colleges', 'college_name', 'college_id', contact.college),
+      ensureIdByName('programs', 'program_name', 'program_id', contact.program),
+      ensureIdByName('companies', 'company_name', 'company_id', contact.company),
+      ensureIdByName('occupations', 'occupation_title', 'occupation_id', contact.occupation),
+      ensureIdByName('locations', 'name', 'location_id', contact.address),
+      ensureEmailId(contact.email, contact.status),
+    ]);
+
+    // Map AlumniType slug → numeric alumni_type_id
+    // 'graduate' → 1, 'marian_graduate' → 2 (matches FALLBACK_ALUMNI_TYPES in ContactForm)
+    const alumniTypeIdMap: Record<string, number> = {
+      graduate: 1,
+      marian_graduate: 2,
+    };
+    const alumniTypeId = contact.alumniType ? (alumniTypeIdMap[contact.alumniType] ?? null) : null;
+
+    const payload: Record<string, any> = {
+      f_name: contact.firstName,
+      l_name: contact.lastName,
+      date_graduated: contact.dateGraduated || null,
+      email_id: emailId,
+      college_id: collegeId,
+      program_id: programId,
+      company_id: companyId,
+      occupation_id: occupationId,
+      contact_number: cleanPhone(contact.contactNumber),
+      alumni_type_id: alumniTypeId,
+    };
+
+    const alumniId = numberOrNull(contact.alumniId ?? contact.id);
+    if (alumniId) {
+      payload.alumni_id = alumniId;
+    }
+
+    const { data, error } = await supabase
+      .from('alumni')
+      .upsert(payload, { onConflict: 'alumni_id' })
+      .select(getContactSelect())
+      .single();
+
+    if (error && error.code === '42703') {
+      noteMissingAlumniAddressColumn();
+      supportsAlumniAddressColumn = false;
+      const retry = await supabase
+        .from('alumni')
+        .upsert(payload, { onConflict: 'alumni_id' })
+        .select(getContactSelect())
+        .single();
+
+      if (retry.error) {
+        throw retry.error;
+      }
+
+      if (!retry.data) {
+        throw new Error('Failed to save contact: no data returned');
+      }
+
+      const savedContactNoAddress = mapContactRowToContact(retry.data as Record<string, any>);
+      const [hydratedNoAddress] = await hydrateContactsWithAddresses([savedContactNoAddress]);
+      return hydratedNoAddress ?? savedContactNoAddress;
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error('Failed to save contact: no data returned');
+    }
+
+    const savedRow = data as Record<string, any>;
+    const persistedAlumniId = numberOrNull(savedRow.alumni_id) ?? alumniId ?? null;
+
+    if (supportsAlumniAddressColumn && persistedAlumniId && locationId) {
+      const existingAddressId =
+        numberOrNull(savedRow.alumniaddress_id) ?? contact.alumniAddressId ?? null;
+      const linkedAddressId = await saveAlumniAddressLink(
+        persistedAlumniId,
+        locationId,
+        existingAddressId ?? undefined
+      );
+
+      if (linkedAddressId && linkedAddressId !== savedRow.alumniaddress_id) {
+        savedRow.alumniaddress_id = linkedAddressId;
+      }
+    }
+
+    const savedContact = mapContactRowToContact(savedRow);
+    const [hydratedContact] = await hydrateContactsWithAddresses([savedContact]);
+    return hydratedContact ?? savedContact;
+  };
+
+  const persistContactsBatch = async (items: Contact[]) => {
+    const saved: Contact[] = [];
+    for (const item of items) {
+      const savedContact = await persistContactToSupabase(item);
+      saved.push(savedContact);
+    }
+    return saved;
+  };
+
+  const triggerEventInvites = async (event: Event, attendees: Contact[], context: string) => {
+    if (!attendees.length) return;
+    try {
+      await sendEventInvites(event, attendees);
+    } catch (err) {
+      console.error(`❌ Failed to send invites (${context})`, err);
+      setSyncError('Event saved, but sending invitations failed.');
+    }
+  };
+
+  const persistEventAttendees = async (eventId: string, attendees: Contact[]) => {
+    const numericEventId = numberOrNull(eventId);
+    console.log('📝 Adding attendees to event:', { 
+      eventId, 
+      numericEventId, 
+      attendeesCount: attendees.length,
+      attendees: attendees.map(a => ({ name: a.name, id: a.id, alumniId: a.alumniId }))
+    });
+    
+    if (!numericEventId) {
+      console.error('❌ Invalid event ID - must be numeric:', eventId);
+      throw new Error('Event must be saved to database before adding attendees');
+    }
+
+    const rows = attendees
+      .map((attendee) => {
+        // Try alumniId first, then fallback to id if it's numeric
+        const alumniId = attendee.alumniId ? numberOrNull(attendee.alumniId) : numberOrNull(attendee.id);
+        if (!alumniId) {
+          console.warn('⚠️ Attendee has no valid alumniId:', { name: attendee.name, id: attendee.id, alumniId: attendee.alumniId });
+        }
+        return alumniId ? { alumniId, rsvpStatus: attendee.rsvpStatus ?? 'pending' as RsvpStatus } : null;
+      })
+      .filter((row): row is { alumniId: number; rsvpStatus: RsvpStatus } => row !== null)
+      .map(({ alumniId, rsvpStatus }) => ({ event_id: numericEventId, alumni_id: alumniId, rsvp_status: rsvpStatus }));
+
+    console.log('📊 Rows to insert:', rows);
+
+    if (rows.length === 0) {
+      console.error('❌ No valid attendee IDs found. All attendees must be saved to database first.');
+      throw new Error('Attendees must be saved to database before adding to events');
+    }
+
+    // Use insert instead of upsert since table may not have unique constraint
+    const { error } = await supabase
+      .from('event_participants')
+      .insert(rows);
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+      console.warn('event_participants.rsvp_status missing; inserting without status');
+      const fallbackRows = rows.map(({ event_id, alumni_id }) => ({ event_id, alumni_id }));
+      const { error: fallbackError } = await supabase.from('event_participants').insert(fallbackRows);
+      if (fallbackError) {
+        console.error('❌ Failed to persist attendees (fallback):', fallbackError);
+        throw fallbackError;
+      }
+    } else if (error) {
+      console.error('❌ Failed to persist attendees:', error);
+      throw error;
+    }
+
+    console.log('✅ Successfully added', rows.length, 'attendees to event');
+  };
+
+  const deleteContactFromSupabase = async (contactId: string) => {
+    const numericAlumniId = numberOrNull(contactId);
+    if (!numericAlumniId) return;
+
+    // Soft delete: mark as inactive instead of deleting
+    const { error } = await supabase
+      .from('alumni')
+      .update({ is_active: false })
+      .eq('alumni_id', numericAlumniId);
+
+    if (error) {
+      console.error('❌ Failed to mark contact as inactive:', error);
+      throw error;
+    }
+
+    console.log('✅ Contact marked as inactive (soft deleted):', numericAlumniId);
+  };
+
+  const deleteContactPermanently = async (contactId: string) => {
+    const numericAlumniId = numberOrNull(contactId);
+
+    if (!numericAlumniId) {
+      throw new Error('Invalid contact ID; cannot delete');
+    }
+
+    // Delete related records first to maintain referential integrity
+    
+    // 1. Delete event participations
+    const { error: participantsError } = await supabase
+      .from('event_participants')
+      .delete()
+      .eq('alumni_id', numericAlumniId);
+
+    if (participantsError) {
+      console.error('❌ Failed to delete event participants:', participantsError);
+      throw participantsError;
+    }
+
+    // 2. Delete alumni addresses
+    const { error: addressError } = await supabase
+      .from('alumni_addresses')
+      .delete()
+      .eq('alumni_id', numericAlumniId);
+
+    if (addressError) {
+      console.error('❌ Failed to delete alumni addresses:', addressError);
+      throw addressError;
+    }
+
+    // 3. Finally delete the alumni record
+    const { error: alumniError } = await supabase
+      .from('alumni')
+      .delete()
+      .eq('alumni_id', numericAlumniId);
+
+    if (alumniError) {
+      console.error('❌ Failed to delete alumni record:', alumniError);
+      throw alumniError;
+    }
+
+    console.log('✅ Contact permanently deleted:', numericAlumniId);
+  };
+
+  const restoreContactInSupabase = async (contactId: string) => {
+    const numericAlumniId = numberOrNull(contactId);
+    if (!numericAlumniId) return;
+
+    const { error } = await supabase
+      .from('alumni')
+      .update({ is_active: true })
+      .eq('alumni_id', numericAlumniId);
+
+    if (error) {
+      console.error('❌ Failed to restore contact in database:', error);
+      throw error;
+    }
+
+    console.log('✅ Contact restored (marked active):', numericAlumniId);
+  };
+
+  const restoreEventInSupabase = async (eventId: string) => {
+    const numericEventId = numberOrNull(eventId);
+    if (!numericEventId) return;
+
+    const { error } = await supabase
+      .from('events')
+      .update({ is_active: true })
+      .eq('event_id', numericEventId);
+
+    if (error) {
+      console.error('❌ Failed to restore event in database:', error);
+      throw error;
+    }
+
+    console.log('✅ Event restored (marked active):', numericEventId);
+  };
+
+  const deleteEventFromSupabase = async (eventId: string) => {
+    const numericEventId = numberOrNull(eventId);
+    if (!numericEventId) return;
+
+    // Soft delete: mark as inactive instead of deleting
+    const { error } = await supabase
+      .from('events')
+      .update({ is_active: false })
+      .eq('event_id', numericEventId);
+
+    if (error) {
+      console.error('❌ Failed to mark event as inactive:', error);
+      throw error;
+    }
+
+    console.log('✅ Event marked as inactive (soft deleted):', numericEventId);
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let isMounted = true;
+
+    const loadData = async () => {
+      setIsSyncing(true);
+      setSyncError(null);
+
+      try {
+        console.log('🔄 Starting to fetch data from Supabase...');
+        
+        const [loadedContacts, loadedEvents, loadedArchivedContacts, loadedArchivedEvents, loadedArchivedTeams, loadedIncubatees, loadedUnassignedFounders, loadedArchivedIncubatees, loadedCohortLevels, loadedStatusOptions] = await Promise.all([
+          fetchContactsFromSupabase(),
+          fetchEventsFromSupabase(),
+          fetchArchivedContactsFromSupabase(),
+          fetchArchivedEventsFromSupabase(),
+          fetchArchivedTeamMembersFromSupabase(),
+          fetchIncubateesFromSupabase(),
+          fetchUnassignedFoundersFromSupabase(),
+          fetchArchivedIncubateesFromSupabase(),
+          fetchCohortLevelsFromDb(),
+          fetchStatusOptionsFromDb(),
+        ]);
+
+        console.log('✅ Data fetched successfully!');
+        console.log('  - Contacts:', loadedContacts.length);
+        console.log('  - Events:', loadedEvents.length);
+        console.log('  - Archived Contacts:', loadedArchivedContacts.length);
+        console.log('  - Archived Events:', loadedArchivedEvents.length);
+        console.log('  - Archived Team Members:', loadedArchivedTeams.length);
+        console.log('  - Incubatees:', loadedIncubatees.length);
+        console.log('  - Unassigned Founders:', loadedUnassignedFounders.length);
+        console.log('  - Archived Incubatees:', loadedArchivedIncubatees.length);
+
+        if (!isMounted) return;
+
+        if (loadedContacts.length > 0) {
+          setContacts(loadedContacts);
+          console.log('✅ Contacts state updated');
+        } else {
+          console.log('⚠️ No contacts found in database');
+        }
+
+        setEvents(loadedEvents);
+        console.log('✅ Events state updated');
+        
+        setArchivedContacts(loadedArchivedContacts);
+        console.log('✅ Archived contacts state updated');
+        
+        setArchivedEvents(loadedArchivedEvents);
+        console.log('✅ Archived events state updated');
+
+        setArchivedTeamMembers(loadedArchivedTeams);
+        console.log('✅ Archived team members state updated');
+
+        setIncubatees(loadedIncubatees);
+        console.log('✅ Incubatees state updated');
+
+        setUnassignedFounders(loadedUnassignedFounders);
+        console.log('✅ Unassigned founders state updated');
+
+        setArchivedIncubatees(loadedArchivedIncubatees);
+        console.log('✅ Archived incubatees state updated');
+
+        setCohortLevelOptions(loadedCohortLevels);
+        console.log('✅ Cohort level options loaded:', loadedCohortLevels.length);
+
+        setStatusOptions(loadedStatusOptions);
+        console.log('✅ Status options loaded:', loadedStatusOptions.length);
+      } catch (error) {
+        console.error('❌ Supabase: failed to load data', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          code: (error as any)?.code,
+          details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          fullError: error,
+        });
+        
+        // Show more specific error message
+        const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+        const specificError = `Unable to load data from Supabase: ${errorMsg}`;
+        
+        console.error('📋 Full error object:', error);
+        
+        if (isMounted) {
+          setSyncError(specificError);
+        }
+      } finally {
+        if (isMounted) {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const channel = supabase
+      .channel('event-participants-rsvp')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_participants' },
+        (payload) => {
+          const row: any = payload.new ?? payload.old;
+          if (!row) return;
+
+          const eventId = row.event_id;
+          const alumniId = row.alumni_id;
+          const rsvpStatus = row.rsvp_status as RsvpStatus | undefined;
+
+          if (!eventId || !alumniId) return;
+
+          const updateList = (list: Event[]) =>
+            list.map((evt) => {
+              if (evt.id !== String(eventId)) return evt;
+              const attendees = evt.attendees.map((attendee) => {
+                const matchId = attendee.alumniId ?? numberOrNull(attendee.id);
+                if (matchId !== numberOrNull(alumniId)) return attendee;
+                return { ...attendee, rsvpStatus: rsvpStatus ?? attendee.rsvpStatus };
+              });
+              return { ...evt, attendees };
+            });
+
+          setEvents((prev) => updateList(prev));
+          setArchivedEvents((prev) => updateList(prev));
+        }
+      );
+
+    channel.subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'archives') return;
+
+    fetchArchivedTeamMembersFromSupabase()
+      .then((teams) => setArchivedTeamMembers(teams))
+      .catch((error) => {
+        console.error('❌ Failed to refresh archived team members', error);
+        setSyncError('Unable to refresh archived team members.');
+      });
+  }, [activeTab, isLoggedIn]);
+
+  const { handleSendEmailCampaign, handleReset, handleEmailUnverifiedContacts } = useContactUiStateActions({
+    setSearchQuery,
+    setGraduatedFrom,
+    setGraduatedTo,
+    setStatusFilter,
+    setSelectedContacts,
+    setActiveTab,
+  });
+
+  const {
+    handleOpenPersonalSettings,
+    handleClosePersonalSettings,
+    handlePasswordUpdated,
+  } = useAuthUiActions({
+    setShowPersonalSettings,
+    setHasExistingPassword,
+  });
+
+  // ─── Incubatee Handlers ───
+
+  const allFounders = [...incubatees.flatMap((inc) => inc.founders), ...unassignedFounders];
+
+  const cohortBuckets = incubatees.reduce((acc, incubatee) => {
+    if (!incubatee.cohortLevel || incubatee.cohortLevel.length === 0) {
+      if (!acc['No Cohort']) {
+        acc['No Cohort'] = [];
+      }
+      acc['No Cohort'].push(incubatee);
+      return acc;
+    }
+
+    incubatee.cohortLevel.forEach((level) => {
+      const key = `Cohort ${level}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(incubatee);
+    });
+
+    return acc;
+  }, {} as Record<string, Incubatee[]>);
+
+  const cohortSummary = [
+    ...new Set([
+      ...cohortLevelOptions.map((option) => `Cohort ${option.level}`),
+      ...Object.keys(cohortBuckets),
+    ]),
+  ]
+    .map((label) => ({
+      label,
+      count: cohortBuckets[label]?.length ?? 0,
+    }))
+    .sort((a, b) => {
+      if (a.label === 'No Cohort') return 1;
+      if (b.label === 'No Cohort') return -1;
+      const aLevel = Number(a.label.replace('Cohort ', ''));
+      const bLevel = Number(b.label.replace('Cohort ', ''));
+      if (Number.isFinite(aLevel) && Number.isFinite(bLevel)) {
+        return aLevel - bLevel;
+      }
+      return a.label.localeCompare(b.label);
+    });
+
+  const statusBuckets = incubatees.reduce((acc, incubatee) => {
+    const key = incubatee.status || 'Unspecified';
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(incubatee);
+    return acc;
+  }, {} as Record<string, Incubatee[]>);
+
+  const statusSummary = [
+    ...new Set([
+      ...statusOptions.map((option) => option.name),
+      ...Object.keys(statusBuckets),
+    ]),
+  ]
+    .map((status) => ({
+      label: status,
+      count: statusBuckets[status]?.length ?? 0,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const sortedIncubatees = [...incubatees].sort((a, b) => {
+    if (startupSortBy === 'alphabetical') {
+      return a.startupName.localeCompare(b.startupName);
+    }
+
+    if (startupSortBy === 'status') {
+      const statusCompare = a.status.localeCompare(b.status);
+      if (statusCompare !== 0) return statusCompare;
+      return a.startupName.localeCompare(b.startupName);
+    }
+
+    const minA = a.cohortLevel.length ? Math.min(...a.cohortLevel) : Number.MAX_SAFE_INTEGER;
+    const minB = b.cohortLevel.length ? Math.min(...b.cohortLevel) : Number.MAX_SAFE_INTEGER;
+    if (minA !== minB) {
+      return minA - minB;
+    }
+    return a.startupName.localeCompare(b.startupName);
+  });
+
+  const normalizedIncubateeSearchQuery = incubateeSearchQuery.trim().toLowerCase();
+  const filteredStartupIncubatees = sortedIncubatees.filter((incubatee) => {
+    if (!normalizedIncubateeSearchQuery) return true;
+
+    const startupMatch = incubatee.startupName
+      .toLowerCase()
+      .includes(normalizedIncubateeSearchQuery);
+    const founderMatch = incubatee.founders.some((founder) =>
+      founder.name.toLowerCase().includes(normalizedIncubateeSearchQuery)
+    );
+
+    return startupMatch || founderMatch;
+  });
+
+  const handleSwitchToStartupView = () => {
+    setIncubateeViewMode('Startup');
+  };
+
+  const handleSwitchToFounderView = () => {
+    setIncubateeViewMode('founders');
+  };
+
+  const handleStartupSortChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setStartupSortBy(event.target.value as 'cohort' | 'status' | 'alphabetical');
+  };
+
+  const handleFounderSortChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setFounderSortBy(event.target.value as 'roles' | 'name' | 'startup');
+  };
+
+  const handleIncubateeSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setIncubateeSearchQuery(event.target.value);
+  };
+
+  const {
+    handleNewIncubatee,
+    handleEditIncubatee,
+    handleCloseIncubateeForm,
+    handleViewIncubatee,
+    handleCloseViewIncubatee,
+    handleViewFounder,
+    handleCloseViewFounder,
+    handleOpenAddFounderModal,
+    handleCloseAddFounderModal,
+  } = useIncubateeModalActions({
+    setEditingIncubatee,
+    setShowIncubateeForm,
+    setViewingIncubatee,
+    setViewingFounder,
+    setShowAddFounderModal,
+  });
+
+  const {
+    handleOpenDeleteFounderConfirm,
+    handleCancelDeleteFounderConfirm,
+    handleOpenDeleteIncubateeConfirm,
+    handleCancelDeleteIncubateeConfirm,
+  } = useIncubateeConfirmActions({
+    selectedFounders,
+    selectedIncubatees,
+    setShowDeleteFounderConfirm,
+    setShowDeleteIncubateeConfirm,
+  });
+
+  const {
+    handleOpenIncubateeExport,
+    handleCloseIncubateeExport,
+    handleOpenFounderExport,
+    handleCloseFounderExport,
+    handleOpenCohortSummaryOverlay,
+    handleOpenStatusSummaryOverlay,
+    handleCloseSummaryOverlay,
+  } = useIncubateeUiActions({
+    setShowIncubateeExport,
+    setShowFounderExport,
+    setActiveSummaryOverlay,
+  });
+
+  const handleSaveIncubatee = async (incubatee: Incubatee) => {
+    // Optimistic local update
+    setIncubatees((prev) => {
+      const exists = prev.find((i) => i.id === incubatee.id);
+      if (exists) {
+        return prev.map((i) => (i.id === incubatee.id ? incubatee : i));
+      }
+      return [...prev, incubatee];
+    });
+    // Optimistically remove any founders that are now part of this incubatee
+    const founderIdsInIncubatee = new Set(incubatee.founders.map((f) => f.id));
+    setUnassignedFounders((prev) => prev.filter((f) => !founderIdsInIncubatee.has(f.id)));
+    setShowIncubateeForm(false);
+    setEditingIncubatee(null);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      const saved = await persistIncubateeToSupabase(incubatee);
+      // Replace the optimistic entry with DB-backed one (real IDs)
+      setIncubatees((prev) =>
+        prev.map((i) => (i.id === incubatee.id || i.id === saved.id ? saved : i))
+      );
+      // Remove any founders that were reassigned from the unassigned list
+      const savedFounderIds = new Set(saved.founders.map((f) => f.id));
+      setUnassignedFounders((prev) => prev.filter((f) => !savedFounderIds.has(f.id)));
+      console.log('✅ Incubatee saved to database');
+    } catch (error) {
+      console.error('❌ Failed to save incubatee to database:', error);
+      setSyncError('Incubatee saved locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteIncubatees = async () => {
+    const idsToDelete = [...selectedIncubatees];
+    // Move to archived state
+    const deletedItems = incubatees.filter((i) => idsToDelete.includes(i.id));
+    setIncubatees((prev) => prev.filter((i) => !idsToDelete.includes(i.id)));
+    setArchivedIncubatees((prev) => [...prev, ...deletedItems]);
+    setSelectedIncubatees([]);
+    setShowDeleteIncubateeConfirm(false);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      await deleteIncubateesFromSupabase(idsToDelete);
+      console.log(`✅ Deleted ${idsToDelete.length} incubatee(s) from database`);
+    } catch (error) {
+      console.error('❌ Failed to delete incubatees from database:', error);
+      setSyncError('Incubatees deleted locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteFounders = () => {
+    const idsToDelete = new Set(selectedFounders);
+
+    // Collect the founders being removed, annotated with their startup name
+    const toArchive: (Founder & { startupName: string })[] = [
+      ...incubatees.flatMap((inc) =>
+        inc.founders
+          .filter((f) => idsToDelete.has(f.id))
+          .map((f) => ({ ...f, startupName: inc.startupName }))
+      ),
+      ...unassignedFounders
+        .filter((f) => idsToDelete.has(f.id))
+        .map((f) => ({ ...f, startupName: '—' })),
+    ];
+
+    // Move to archived state
+    setArchivedFounders((prev) => [...prev, ...toArchive]);
+
+    // Remove from active state
+    setIncubatees((prev) =>
+      prev.map((inc) => ({
+        ...inc,
+        founders: inc.founders.filter((f) => !idsToDelete.has(f.id)),
+      }))
+    );
+    setUnassignedFounders((prev) => prev.filter((f) => !idsToDelete.has(f.id)));
+    setSelectedFounders([]);
+    setShowDeleteFounderConfirm(false);
+
+    // Detach founders from incubatees in DB (keeps them as unassigned, not permanently deleted)
+    unassignFoundersInDb([...idsToDelete]).catch((error) => {
+      console.error('❌ Failed to unassign founders in database:', error);
+      setSyncError('Founders archived locally but failed to sync with database.');
+    });
+  };
+
+  const handleSaveFounder = async (updatedFounder: Founder) => {
+    if (!viewingFounder) return;
+    // Optimistic update
+    setIncubatees((prev) =>
+      prev.map((inc) => {
+        if (inc.id === viewingFounder.incubatee.id) {
+          return {
+            ...inc,
+            founders: inc.founders.map((f) =>
+              f.id === updatedFounder.id ? updatedFounder : f
+            ),
+          };
+        }
+        return inc;
+      })
+    );
+    setViewingFounder(null);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      const saved = await updateFounderInDb(updatedFounder);
+      setIncubatees((prev) =>
+        prev.map((inc) => {
+          if (inc.id === viewingFounder.incubatee.id) {
+            return {
+              ...inc,
+              founders: inc.founders.map((f) =>
+                f.id === updatedFounder.id || f.id === saved.id ? saved : f
+              ),
+            };
+          }
+          return inc;
+        })
+      );
+      console.log('✅ Founder updated in database');
+    } catch (error) {
+      console.error('❌ Failed to update founder in database:', error);
+      setSyncError('Founder updated locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleAddFounderToIncubatee = async (incubateeId: string, founder: Founder) => {
+    // Optimistic local update — only attach to incubatee if one was selected
+    if (incubateeId) {
+      setIncubatees((prev) =>
+        prev.map((inc) => {
+          if (inc.id === incubateeId) {
+            return { ...inc, founders: [...inc.founders, founder] };
+          }
+          return inc;
+        })
+      );
+    } else {
+      // No startup selected — track as unassigned founder
+      setUnassignedFounders((prev) => [founder, ...prev]);
+    }
+    setShowAddFounderModal(false);
+
+    // Persist to database
+    setIsSyncing(true);
+    try {
+      const savedFounder = await addFounderToIncubateeInDb(incubateeId, founder);
+      // Replace the optimistic founder with DB-backed one
+      if (incubateeId) {
+        setIncubatees((prev) =>
+          prev.map((inc) => {
+            if (inc.id === incubateeId) {
+              return {
+                ...inc,
+                founders: inc.founders.map((f) =>
+                  f.id === founder.id ? savedFounder : f
+                ),
+              };
+            }
+            return inc;
+          })
+        );
+      } else {
+        setUnassignedFounders((prev) =>
+          prev.map((f) => (f.id === founder.id ? savedFounder : f))
+        );
+      }
+      console.log('✅ Founder added to database');
+    } catch (error) {
+      console.error('❌ Failed to add founder to database:', error);
+      setSyncError('Founder added locally but failed to sync with database.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleLinkFounderToIncubatee = async (incubateeId: string, existingFounder: Founder) => {
+    // Move the founder from its current location to the target incubatee in local state
+    setUnassignedFounders((prev) => prev.filter((f) => f.id !== existingFounder.id));
+    setIncubatees((prev) =>
+      prev.map((inc) => {
+        // Remove from any existing incubatee
+        const without = inc.founders.filter((f) => f.id !== existingFounder.id);
+        if (inc.id === incubateeId) {
+          return { ...inc, founders: [...without, existingFounder] };
+        }
+        return { ...inc, founders: without };
+      })
+    );
+    setShowAddFounderModal(false);
+
+    // Persist to DB
+    try {
+      await linkFounderToIncubateeInDb(existingFounder.id, incubateeId);
+      console.log('✅ Founder linked to incubatee in database');
+    } catch (error) {
+      console.error('❌ Failed to link founder:', error);
+      setSyncError('Founder linked locally but failed to sync with database.');
+    }
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
   };
 
   // ─── Incubatee Handlers ───
@@ -1733,6 +2864,7 @@ export default function App() {
     setShowForm(true);
   };
 
+<<<<<<< HEAD
   const handleUpdateContactStatus = async (updatedContact: Contact) => {
     const previous = contacts.find((c) => c.id === updatedContact.id);
     const becameUnverified =
@@ -1835,22 +2967,73 @@ export default function App() {
       setIsSyncing(false);
     }
   };
+=======
+  const { handleUpdateContactStatus } = useContactStatusActions({
+    contacts,
+    setContacts,
+    setViewingContact,
+    setSyncError,
+    ensureEmailId,
+    sendVerificationEmail,
+  });
 
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setEditingContact(null);
-  };
+  const {
+    handleCancelDeleteConfirm,
+    handleConfirmArchiveContacts,
+  } = useContactArchiveActions({
+    contacts,
+    selectedContacts,
+    setContacts,
+    setArchivedContacts,
+    setSelectedContacts,
+    setShowDeleteConfirm,
+    setIsSyncing,
+    setSyncError,
+    deleteContactFromSupabase,
+  });
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
-  const handleCloseView = () => {
-    setViewingContact(null);
-  };
+  const {
+    handleSaveContact,
+    handleCloseForm,
+    handleCloseView,
+  } = useContactFormActions({
+    editingContact,
+    setContacts,
+    setShowForm,
+    setEditingContact,
+    setViewingContact,
+    setIsSyncing,
+    setSyncError,
+    persistContactToSupabase,
+    sendVerificationEmail,
+  });
 
-  const handleDelete = () => {
-    if (selectedContacts.length > 0) {
-      setShowDeleteConfirm(true);
-    }
-  };
+  const { handleDeleteEvent } = useEventArchiveActions({
+    events,
+    archivedEvents,
+    setEvents,
+    setArchivedEvents,
+    setSyncError,
+    openConfirm,
+    deleteEventFromSupabase,
+  });
 
+  const {
+    handleDelete,
+    handleImportContacts,
+    handleViewContact,
+  } = useContactListActions({
+    selectedContacts,
+    setContacts,
+    setViewingContact,
+    setShowDeleteConfirm,
+    setIsSyncing,
+    setSyncError,
+    persistContactsBatch,
+  });
+
+<<<<<<< HEAD
   const handleDeleteEvent = async (eventId: string) => {
     console.log('🗑️ Delete event requested:', eventId);
     const confirmed = await openConfirm({
@@ -1910,11 +3093,49 @@ export default function App() {
       })
       .finally(() => setIsSyncing(false));
   };
+=======
+  const {
+    handleOpenCreateEvent,
+    handleCloseCreateEvent,
+    handleEditEvent,
+    handleCloseEditEvent,
+    handleViewEvent,
+    handleCloseViewEvent,
+  } = useEventModalActions({
+    setShowCreateEvent,
+    setEditingEvent,
+    setViewingEvent,
+  });
 
-  const handleViewContact = (contact: Contact) => {
-    setViewingContact(contact);
-  };
+  const {
+    handleOpenImport,
+    handleCloseImport,
+    handleOpenExport,
+    handleCloseExport,
+  } = useContactModalActions({
+    setShowImport,
+    setShowExport,
+  });
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
+  const {
+    handleCreateEvent,
+    handleUpdateEvent,
+    handleAddAttendees,
+  } = useEventActions({
+    events,
+    viewingEvent,
+    setEvents,
+    setViewingEvent,
+    setEditingEvent,
+    setShowCreateEvent,
+    setIsSyncing,
+    setSyncError,
+    triggerEventInvites,
+    persistEventAttendees,
+  });
+
+<<<<<<< HEAD
   const handleCreateEvent = async (event: Event) => {
     setIsSyncing(true);
     setSyncError(null);
@@ -1977,11 +3198,41 @@ export default function App() {
       setIsSyncing(false);
     }
   };
+=======
+  const {
+    handleRestoreContact,
+    handleRestoreEvent,
+    handlePermanentDeleteContact,
+    handlePermanentDeleteEvent,
+  } = useArchiveActions({
+    setContacts,
+    setArchivedContacts,
+    setEvents,
+    setArchivedEvents,
+    setIsSyncing,
+    setSyncError,
+    restoreContactInSupabase,
+    restoreEventInSupabase,
+    deleteContactPermanently,
+    deleteEventPermanently,
+  });
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
-  const handleViewEvent = (event: Event) => {
-    setViewingEvent(event);
-  };
+  const {
+    handleRestoreIncubatee,
+    handlePermanentDeleteIncubatee,
+  } = useIncubateeArchiveActions({
+    archivedIncubatees,
+    setArchivedIncubatees,
+    setIncubatees,
+    setArchivedFounders,
+    setIsSyncing,
+    setSyncError,
+    restoreIncubateesInDb,
+    deleteIncubateePermanentlyInDb,
+  });
 
+<<<<<<< HEAD
   const handleAddAttendees = async (eventId: string, newAttendees: Contact[]) => {
     console.log('🎯 App - handleAddAttendees called:', {
       eventId,
@@ -2222,6 +3473,32 @@ export default function App() {
     const matchesStatus = statusFilter === 'all' || contact.status === statusFilter;
 
     return matchesQuery && matchesDate && matchesStatus;
+=======
+  const {
+    handleDeleteArchivedFounder,
+    handleRemoveFounderFromArchivedIncubatee,
+    handleRestoreFounder,
+  } = useFounderArchiveActions({
+    setArchivedFounders,
+    setArchivedIncubatees,
+    setUnassignedFounders,
+    deleteFoundersFromSupabase,
+  });
+
+  const { handleViewFounderRow } = useFounderTableActions({
+    incubatees,
+    handleViewFounder,
+  });
+
+  const handleCloseDialog = () => setDialog(null);
+
+  const filteredContacts = useFilteredContacts({
+    contacts,
+    searchQuery,
+    graduatedFrom,
+    graduatedTo,
+    statusFilter,
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
   });
 
   // Show login page if not logged in
@@ -2273,6 +3550,7 @@ export default function App() {
   }
 
   if (isMemberPath) {
+<<<<<<< HEAD
     if (isRoleLoading) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-[#F5F1ED]">
@@ -2298,6 +3576,25 @@ export default function App() {
           />
         </main>
       </div>
+=======
+    return (
+      <MemberRouteGuard
+        isLoggedIn={isLoggedIn}
+        isRoleLoading={isRoleLoading}
+        currentUserRole={currentUserRole}
+      >
+        <div className="min-h-screen bg-[#F5F1ED]">
+          <main className="max-w-[1200px] mx-auto p-8">
+            <Home
+              contacts={contacts}
+              onViewContact={handleViewContact}
+              onSendEmailCampaign={handleSendEmailCampaign}
+              onEmailUnverifiedContacts={handleEmailUnverifiedContacts}
+            />
+          </main>
+        </div>
+      </MemberRouteGuard>
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
     );
   }
 
@@ -2308,7 +3605,11 @@ export default function App() {
         onTabChange={setActiveTab}
         onLogout={handleLogout}
         currentUserRole={currentUserRole}
+<<<<<<< HEAD
         onOpenSettings={() => setShowPersonalSettings(true)}
+=======
+        onOpenSettings={handleOpenPersonalSettings}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         userName={currentUserName}
         userEmail={currentUserEmail}
       />
@@ -2337,7 +3638,7 @@ export default function App() {
           ) : activeTab === 'events' ? (
             <Events
               events={events}
-              onCreateEvent={() => setShowCreateEvent(true)}
+              onCreateEvent={handleOpenCreateEvent}
               onViewEvent={handleViewEvent}
               onDeleteEvent={handleDeleteEvent}
               onEditEvent={handleEditEvent}
@@ -2357,6 +3658,7 @@ export default function App() {
               onPermanentDeleteEvent={handlePermanentDeleteEvent}
               onPermanentDeleteTeamMember={handlePermanentDeleteTeamMember}
               onPermanentDeleteIncubatee={handlePermanentDeleteIncubatee}
+<<<<<<< HEAD
               onDeleteArchivedFounder={async (founderId: string) => {
                 setArchivedFounders((prev) => prev.filter((f) => f.id !== founderId));
                 try {
@@ -2394,6 +3696,11 @@ export default function App() {
                   );
                 }
               }}
+=======
+              onDeleteArchivedFounder={handleDeleteArchivedFounder}
+              onRemoveFounderFromIncubatee={handleRemoveFounderFromArchivedIncubatee}
+              onRestoreFounder={handleRestoreFounder}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
             />
           ) : activeTab === 'team' ? (
             <Team
@@ -2409,6 +3716,57 @@ export default function App() {
               <div className="mb-8">
                 <h1 className="text-3xl mb-6">Manage Incubatees</h1>
 
+<<<<<<< HEAD
+=======
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white rounded-xl p-6 border border-gray-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-[#FF2B5E]/10 rounded-lg flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-[#FF2B5E]" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{incubatees.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Total Startups</p>
+                  </div>
+
+                  <button
+                    onClick={handleOpenCohortSummaryOverlay}
+                    className="bg-white rounded-xl p-6 border border-gray-200 text-left hover:border-[#FF2B5E] hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <Layers3 className="w-5 h-5 text-green-600" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{cohortSummary.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Cohort</p>
+                  </button>
+
+                  <button
+                    onClick={handleOpenStatusSummaryOverlay}
+                    className="bg-white rounded-xl p-6 border border-gray-200 text-left hover:border-[#FF2B5E] hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Tags className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{statusSummary.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Status</p>
+                  </button>
+
+                  <div className="bg-white rounded-xl p-6 border border-gray-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Users className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <h3 className="text-2xl font-semibold text-gray-900">{allFounders.length}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600">Total Founders</p>
+                  </div>
+                </div>
+
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                 {/* Action Buttons + View Toggle */}
                 <div className="flex items-center gap-3 mb-6">
                   {incubateeViewMode === 'Startup' ? (
@@ -2421,9 +3779,13 @@ export default function App() {
                         New Startup
                       </button>
                       <button
+<<<<<<< HEAD
                         onClick={() => {
                           if (selectedIncubatees.length > 0) setShowDeleteIncubateeConfirm(true);
                         }}
+=======
+                        onClick={handleOpenDeleteIncubateeConfirm}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         disabled={selectedIncubatees.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2431,7 +3793,11 @@ export default function App() {
                         Delete
                       </button>
                       <button
+<<<<<<< HEAD
                         onClick={() => setShowIncubateeExport(true)}
+=======
+                        onClick={handleOpenIncubateeExport}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         disabled={incubatees.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2442,16 +3808,24 @@ export default function App() {
                   ) : (
                     <>
                       <button
+<<<<<<< HEAD
                         onClick={() => setShowAddFounderModal(true)}
+=======
+                        onClick={handleOpenAddFounderModal}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         className="flex items-center gap-2 bg-[#FF2B5E] text-white px-5 py-2.5 rounded-lg hover:bg-[#E6275A] transition-colors"
                       >
                         <Plus className="w-4 h-4" />
                         Add Founder
                       </button>
                       <button
+<<<<<<< HEAD
                         onClick={() => {
                           if (selectedFounders.length > 0) setShowDeleteFounderConfirm(true);
                         }}
+=======
+                        onClick={handleOpenDeleteFounderConfirm}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         disabled={selectedFounders.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2459,7 +3833,11 @@ export default function App() {
                         Delete
                       </button>
                       <button
+<<<<<<< HEAD
                         onClick={() => setShowFounderExport(true)}
+=======
+                        onClick={handleOpenFounderExport}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         disabled={allFounders.length === 0}
                         className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2472,8 +3850,13 @@ export default function App() {
                   {/* View Toggle */}
                   <div className="ml-auto flex items-center gap-0 bg-gray-100 rounded-lg p-1">
                     <button
+<<<<<<< HEAD
                       onClick={() => setIncubateeViewMode('Startup')}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+=======
+                      onClick={handleSwitchToStartupView}
+                      className={`w-28 flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         incubateeViewMode === 'Startup'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
                           : 'text-gray-600 hover:text-gray-800'
@@ -2483,8 +3866,13 @@ export default function App() {
                       Startup
                     </button>
                     <button
+<<<<<<< HEAD
                       onClick={() => setIncubateeViewMode('founders')}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+=======
+                      onClick={handleSwitchToFounderView}
+                      className={`w-28 flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                         incubateeViewMode === 'founders'
                           ? 'bg-[#FF2B5E] text-white shadow-sm'
                           : 'text-gray-600 hover:text-gray-800'
@@ -2495,6 +3883,44 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+<<<<<<< HEAD
+=======
+
+                <div className="flex items-center gap-3 mb-6">
+                  <label className="text-sm text-gray-600">Sort by</label>
+                  {incubateeViewMode === 'Startup' ? (
+                    <select
+                      value={startupSortBy}
+                      onChange={handleStartupSortChange}
+                      className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
+                    >
+                      <option value="cohort">Cohort</option>
+                      <option value="status">Status</option>
+                      <option value="alphabetical">Alphabetical order</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={founderSortBy}
+                      onChange={handleFounderSortChange}
+                      className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
+                    >
+                      <option value="roles">Roles</option>
+                      <option value="name">Alphabetical order name</option>
+                      <option value="startup">Startup</option>
+                    </select>
+                  )}
+                  <div className="relative min-w-[240px]">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={incubateeSearchQuery}
+                      onChange={handleIncubateeSearchChange}
+                      placeholder={incubateeViewMode === 'Startup' ? 'Search startup' : 'Search founder'}
+                      className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF2B5E]/30"
+                    />
+                  </div>
+                </div>
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
               </div>
 
               {/* Content */}
@@ -2512,9 +3938,20 @@ export default function App() {
                       Add Incubatee
                     </button>
                   </div>
+<<<<<<< HEAD
                 ) : (
                   <IncubateeCards
                     incubatees={incubatees}
+=======
+                ) : filteredStartupIncubatees.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No matching startups found</h3>
+                    <p className="text-gray-500">Try a different startup or founder name.</p>
+                  </div>
+                ) : (
+                  <IncubateeCards
+                    incubatees={filteredStartupIncubatees}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                     selectedIncubatees={selectedIncubatees}
                     setSelectedIncubatees={setSelectedIncubatees}
                     onViewIncubatee={handleViewIncubatee}
@@ -2522,6 +3959,7 @@ export default function App() {
                 )
               ) : (
                 <FoundersTable
+<<<<<<< HEAD
                   incubatees={incubatees}
                   unassignedFounders={unassignedFounders}
                   onViewFounder={(row) => {
@@ -2533,6 +3971,13 @@ export default function App() {
                       if (founder) handleViewFounder(founder, inc);
                     }
                   }}
+=======
+                  incubatees={sortedIncubatees}
+                  unassignedFounders={unassignedFounders}
+                  sortBy={founderSortBy}
+                  searchQuery={incubateeSearchQuery}
+                  onViewFounder={handleViewFounderRow}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                   selectedFounders={selectedFounders}
                   onSelectionChange={setSelectedFounders}
                 />
@@ -2564,14 +4009,14 @@ export default function App() {
                     Delete
                   </button>
                   <button 
-                    onClick={() => setShowImport(true)}
+                    onClick={handleOpenImport}
                     className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
                   >
                     <Upload className="w-4 h-4" />
                     Import
                   </button>
                   <button 
-                    onClick={() => setShowExport(true)}
+                    onClick={handleOpenExport}
                     className="flex items-center gap-2 bg-white text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
                   >
                     <Download className="w-4 h-4" />
@@ -2648,7 +4093,11 @@ export default function App() {
         <CreateEvent
           contacts={contacts}
           incubatees={incubatees}
+<<<<<<< HEAD
           onClose={() => setShowCreateEvent(false)}
+=======
+          onClose={handleCloseCreateEvent}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
           onSave={handleCreateEvent}
         />
       )}
@@ -2658,7 +4107,11 @@ export default function App() {
         <EditEvent
           event={editingEvent}
           contacts={contacts}
+<<<<<<< HEAD
           onClose={() => setEditingEvent(null)}
+=======
+          onClose={handleCloseEditEvent}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
           onSave={handleUpdateEvent}
         />
       )}
@@ -2668,7 +4121,7 @@ export default function App() {
         <ViewEvent
           event={viewingEvent}
           contacts={contacts}
-          onClose={() => setViewingEvent(null)}
+          onClose={handleCloseViewEvent}
           onAddAttendees={handleAddAttendees}
           onArchiveEvent={handleDeleteEvent}
         />
@@ -2677,7 +4130,7 @@ export default function App() {
       {/* Import Modal */}
       {showImport && (
         <ImportContact
-          onClose={() => setShowImport(false)}
+          onClose={handleCloseImport}
           onImport={handleImportContacts}
         />
       )}
@@ -2687,7 +4140,7 @@ export default function App() {
         <ExportContact
           contacts={contacts}
           selectedContacts={selectedContacts}
-          onClose={() => setShowExport(false)}
+          onClose={handleCloseExport}
         />
       )}
 
@@ -2695,7 +4148,11 @@ export default function App() {
         <ExportIncubatee
           incubatees={incubatees}
           selectedIncubatees={selectedIncubatees}
+<<<<<<< HEAD
           onClose={() => setShowIncubateeExport(false)}
+=======
+          onClose={handleCloseIncubateeExport}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         />
       )}
 
@@ -2704,12 +4161,17 @@ export default function App() {
           incubatees={incubatees}
           unassignedFounders={unassignedFounders}
           selectedFounders={selectedFounders}
+<<<<<<< HEAD
           onClose={() => setShowFounderExport(false)}
+=======
+          onClose={handleCloseFounderExport}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         />
       )}
 
       {showPersonalSettings && (
         <PersonalSettings
+<<<<<<< HEAD
           onClose={() => setShowPersonalSettings(false)}
           userName={currentUserName}
           userEmail={currentUserEmail}
@@ -2718,6 +4180,13 @@ export default function App() {
             setHasExistingPassword(true);
             localStorage.setItem('auth_method', 'password');
           }}
+=======
+          onClose={handleClosePersonalSettings}
+          userName={currentUserName}
+          userEmail={currentUserEmail}
+          hasExistingPassword={hasExistingPassword}
+          onPasswordUpdated={handlePasswordUpdated}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         />
       )}
 
@@ -2743,10 +4212,14 @@ export default function App() {
             return saved;
           }}
           onSave={handleSaveIncubatee}
+<<<<<<< HEAD
           onClose={() => {
             setShowIncubateeForm(false);
             setEditingIncubatee(null);
           }}
+=======
+          onClose={handleCloseIncubateeForm}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         />
       )}
 
@@ -2754,7 +4227,11 @@ export default function App() {
       {viewingIncubatee && (
         <ViewIncubatee
           incubatee={viewingIncubatee}
+<<<<<<< HEAD
           onClose={() => setViewingIncubatee(null)}
+=======
+          onClose={handleCloseViewIncubatee}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
           onEdit={handleEditIncubatee}
         />
       )}
@@ -2764,7 +4241,11 @@ export default function App() {
         <ViewFounder
           founder={viewingFounder.founder}
           incubatee={viewingFounder.incubatee}
+<<<<<<< HEAD
           onClose={() => setViewingFounder(null)}
+=======
+          onClose={handleCloseViewFounder}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
           onSave={handleSaveFounder}
         />
       )}
@@ -2777,7 +4258,11 @@ export default function App() {
             ...incubatees.flatMap((inc) => inc.founders.map((f) => ({ ...f, startupName: inc.startupName }))),
             ...unassignedFounders.map((f) => ({ ...f, startupName: '—' })),
           ]}
+<<<<<<< HEAD
           onClose={() => setShowAddFounderModal(false)}
+=======
+          onClose={handleCloseAddFounderModal}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
           onSave={handleAddFounderToIncubatee}
           onLinkExisting={handleLinkFounderToIncubatee}
         />
@@ -2794,7 +4279,11 @@ export default function App() {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
+<<<<<<< HEAD
                 onClick={() => setShowDeleteFounderConfirm(false)}
+=======
+                onClick={handleCancelDeleteFounderConfirm}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                 className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
@@ -2822,7 +4311,11 @@ export default function App() {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
+<<<<<<< HEAD
                 onClick={() => setShowDeleteIncubateeConfirm(false)}
+=======
+                onClick={handleCancelDeleteIncubateeConfirm}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                 className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
@@ -2839,6 +4332,54 @@ export default function App() {
         </div>
       )}
 
+<<<<<<< HEAD
+=======
+      {activeSummaryOverlay && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 space-y-4 shadow-xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {activeSummaryOverlay === 'cohort' ? 'Cohort Summary' : 'Status Summary'}
+                </h3>
+                <p className="text-gray-600">
+                  {activeSummaryOverlay === 'cohort'
+                    ? `Total cohort levels: ${cohortSummary.length}`
+                    : `Total statuses: ${statusSummary.length}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseSummaryOverlay}
+                className="px-3 py-1.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            {(activeSummaryOverlay === 'cohort' ? cohortSummary : statusSummary).length === 0 ? (
+              <p className="text-sm text-gray-500">
+                {activeSummaryOverlay === 'cohort'
+                  ? 'No cohort data available.'
+                  : 'No status data available.'}
+              </p>
+            ) : (
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {(activeSummaryOverlay === 'cohort' ? cohortSummary : statusSummary).map((item) => (
+                  <div key={item.label} className="px-4 py-3 flex items-center justify-between gap-4">
+                    <p className="font-medium text-gray-900">{item.label}</p>
+                    <p className="text-sm text-gray-600">
+                      {item.count} startup{item.count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
       {/* Delete confirmation */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -2850,13 +4391,14 @@ export default function App() {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={handleCancelDeleteConfirm}
                 className="px-5 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
+<<<<<<< HEAD
                 onClick={async () => {
                   const contactsToArchive = contacts.filter((c) => selectedContacts.includes(c.id));
                   
@@ -2880,6 +4422,9 @@ export default function App() {
                     setIsSyncing(false);
                   }
                 }}
+=======
+                onClick={handleConfirmArchiveContacts}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
                 className="px-5 py-2.5 bg-[#FF2B5E] text-white rounded-lg hover:bg-[#E6275A] transition-colors"
               >
                 Confirm
@@ -2895,7 +4440,11 @@ export default function App() {
         confirmLabel={dialog?.confirmLabel}
         cancelLabel={dialog?.cancelLabel}
         tone={dialog?.tone}
+<<<<<<< HEAD
         onConfirm={dialog?.onConfirm ?? (() => setDialog(null))}
+=======
+        onConfirm={dialog?.onConfirm ?? handleCloseDialog}
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
         onCancel={dialog?.onCancel}
       />
     </div>

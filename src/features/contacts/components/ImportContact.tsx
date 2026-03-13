@@ -1,10 +1,18 @@
 import { ArrowLeft, X, Upload, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+<<<<<<< HEAD:src/components/ImportContact.tsx
+import type { Contact, ContactStatus } from '../types';
+import type { ParseResult } from 'papaparse';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { PopupDialog } from './PopupDialog';
+=======
 import type { Contact, ContactStatus } from '../../../types';
 import type { ParseResult } from 'papaparse';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { PopupDialog } from '../../shared/components/PopupDialog';
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b:src/features/contacts/components/ImportContact.tsx
 
 interface ImportContactProps {
   onClose: () => void;

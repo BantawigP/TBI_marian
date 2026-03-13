@@ -1,10 +1,6 @@
 import { useState } from 'react';
 import { Users, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
-<<<<<<< HEAD:src/components/Login.tsx
-import { supabase } from '../lib/supabaseClient';
-=======
 import { supabase } from '../../../lib/supabaseClient';
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b:src/features/auth/components/Login.tsx
 
 interface LoginProps {
   onLogin: () => void;

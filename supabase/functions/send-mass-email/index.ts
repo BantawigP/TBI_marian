@@ -1,6 +1,7 @@
 // Edge Function: send-mass-email
 // Sends mass broadcast emails for events that do not require RSVP links.
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type EventPayload = {
   id: string;
@@ -31,6 +32,16 @@ const corsHeaders = {
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const DEFAULT_FROM = Deno.env.get("RESEND_FROM") || "MARIAN TBI <no-reply@mariantbi.uic.edu.ph>";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Missing required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 1800;
@@ -46,6 +57,41 @@ const escapeHtml = (value: string) =>
     .replaceAll("'", "&#39;");
 
 const normalizeLineBreaks = (value: string) => value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+
+const toSafeError = (value?: string) => {
+  if (!value) return null;
+  return value.length > 1500 ? `${value.slice(0, 1500)}...` : value;
+};
+
+const persistDeliveryLogs = async (
+  eventId: number,
+  attendees: AttendeePayload[],
+  batchResult: { ok: boolean; error?: string; providerMessageId?: string },
+) => {
+  if (!supabase) return;
+
+  const attemptedAt = new Date().toISOString();
+  const rows = attendees.map((attendee) => ({
+    event_id: eventId,
+    alumni_id: attendee.alumniId ?? null,
+    email: attendee.email,
+    delivery_channel: "mass_email",
+    delivery_status: batchResult.ok ? "sent" : "failed",
+    error_message: toSafeError(batchResult.error),
+    provider: "resend",
+    provider_message_id: batchResult.providerMessageId ?? null,
+    attempted_at: attemptedAt,
+  }));
+
+  const { error } = await supabase.from("event_email_delivery_logs").insert(rows);
+  if (error) {
+    console.error("Failed to persist mass email delivery logs", {
+      eventId,
+      count: rows.length,
+      message: error.message,
+    });
+  }
+};
 
 const renderEmailHtml = (event: EventPayload) => {
   const safeTitle = escapeHtml(event.title);
@@ -126,6 +172,13 @@ serve(async (req: Request) => {
     });
   }
 
+  if (!supabase) {
+    return new Response(JSON.stringify({ error: "Supabase server configuration missing" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   let payload: Payload;
   try {
     payload = (await req.json()) as Payload;
@@ -138,6 +191,14 @@ serve(async (req: Request) => {
 
   if (!payload.event || !payload.attendees?.length) {
     return new Response(JSON.stringify({ error: "Missing event or attendees" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const eventId = Number(payload.event.id);
+  if (!Number.isFinite(eventId)) {
+    return new Response(JSON.stringify({ error: "event.id must be numeric" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -173,18 +234,27 @@ serve(async (req: Request) => {
       }),
     });
 
+    let providerMessageId: string | undefined;
+    let batchErrorText: string | undefined;
+
+    if (resendRes.ok) {
+      const responseJson = await resendRes.json().catch(() => null);
+      providerMessageId = typeof responseJson?.id === "string" ? responseJson.id : undefined;
+    } else {
+      batchErrorText = await resendRes.text();
+    }
+
     const batchResults = currentBatch.map((attendee) => ({
       email: attendee.email,
       ok: resendRes.ok,
-      error: undefined as string | undefined,
+      error: batchErrorText,
     }));
 
-    if (!resendRes.ok) {
-      const body = await resendRes.text();
-      for (const result of batchResults) {
-        result.error = body;
-      }
-    }
+    await persistDeliveryLogs(eventId, currentBatch, {
+      ok: resendRes.ok,
+      error: batchErrorText,
+      providerMessageId,
+    });
 
     sendResults.push(...batchResults);
 

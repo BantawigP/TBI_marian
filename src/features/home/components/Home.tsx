@@ -1,9 +1,5 @@
 import { Users, UserCheck, UserX, TrendingUp, Calendar, Mail } from 'lucide-react';
-<<<<<<< HEAD:src/components/Home.tsx
-import type { Contact } from '../types';
-=======
 import type { Contact } from '../../../types';
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b:src/features/home/components/Home.tsx
 
 interface HomeProps {
   contacts: Contact[];

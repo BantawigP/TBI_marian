@@ -28,11 +28,8 @@ interface Payload {
   role: "Admin" | "Manager" | "Member";
 }
 
-<<<<<<< HEAD
-=======
 const ALLOWED_INVITER_ROLES = new Set(["Admin"]);
 
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -93,8 +90,6 @@ async function getRoleIdByName(roleName: string): Promise<number | null> {
   return data?.id ?? null;
 }
 
-<<<<<<< HEAD
-=======
 async function resolveInviterRoleName(userId: string, userEmail?: string): Promise<string | null> {
   if (!supabase) return null;
 
@@ -136,7 +131,6 @@ async function resolveInviterRoleName(userId: string, userEmail?: string): Promi
   return roleFromTeams(byEmail);
 }
 
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 const renderInviteHTML = (name: string, actionLink: string, claimLink: string) => `
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f9fafb;padding:32px 0;font-family:Arial,Helvetica,sans-serif;">
   <tr>
@@ -213,8 +207,6 @@ serve(async (req: Request) => {
     });
   }
 
-<<<<<<< HEAD
-=======
   const inviterRoleName = await resolveInviterRoleName(userId, adminUserData.user.email ?? undefined);
   if (!inviterRoleName || !ALLOWED_INVITER_ROLES.has(inviterRoleName)) {
     return new Response(JSON.stringify({ error: "Forbidden" }), {
@@ -223,7 +215,6 @@ serve(async (req: Request) => {
     });
   }
 
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
   let payload: Payload;
   try {
     payload = (await req.json()) as Payload;
@@ -366,12 +357,6 @@ serve(async (req: Request) => {
 
   // Ensure from field is always valid - use hardcoded fallback if needed
   const fromAddress = DEFAULT_FROM || "onboarding@resend.dev";
-<<<<<<< HEAD
-  console.log("Using from address:", fromAddress);
-  console.log("Sending email to:", email);
-
-=======
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
   if (!RESEND_API_KEY) {
     await supabase
       .from("teams")
@@ -379,15 +364,8 @@ serve(async (req: Request) => {
       .eq("id", teamMemberId);
 
     return new Response(JSON.stringify({
-<<<<<<< HEAD
-      message: "Access granted, but email was not sent because RESEND_API_KEY is missing. Share the magic link manually.",
-      warning: "Email not sent — RESEND_API_KEY is not set",
-      claimLink,
-      actionLink,
-=======
       message: "Access granted, but email was not sent because RESEND_API_KEY is missing.",
       warning: "Email not sent — RESEND_API_KEY is not set",
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -421,15 +399,8 @@ serve(async (req: Request) => {
         .update({ has_access: true, user_id: authUserId })
         .eq("id", teamMemberId);
       return new Response(JSON.stringify({
-<<<<<<< HEAD
-        message: "Access granted! The invitation email could not be sent because the Resend domain is not verified (free-tier limitation). Share the magic link manually or verify a domain at resend.com/domains.",
-        warning: "Email not sent — Resend domain not verified",
-        claimLink,
-        actionLink,
-=======
         message: "Access granted! The invitation email could not be sent because the Resend domain is not verified (free-tier limitation).",
         warning: "Email not sent — Resend domain not verified",
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -443,17 +414,9 @@ serve(async (req: Request) => {
       .eq("id", teamMemberId);
 
     return new Response(JSON.stringify({
-<<<<<<< HEAD
-      message: "Access granted, but invitation email failed to send. Share the magic link manually.",
-      warning: "Email not sent — Resend delivery failed",
-      detail: errorText,
-      claimLink,
-      actionLink,
-=======
       message: "Access granted, but invitation email failed to send.",
       warning: "Email not sent — Resend delivery failed",
       detail: errorText,
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1,6 +1,10 @@
 import { ArrowLeft, X, Download, FileSpreadsheet, Check } from 'lucide-react';
 import { useMemo, useState } from 'react';
+<<<<<<< HEAD:src/components/ExportContact.tsx
+import type { Contact } from '../types';
+=======
 import type { Contact } from '../../../types';
+>>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b:src/features/contacts/components/ExportContact.tsx
 
 interface ExportContactProps {
   contacts: Contact[];

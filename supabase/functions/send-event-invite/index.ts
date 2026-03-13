@@ -55,40 +55,6 @@ const BATCH_DELAY_MS = 1800;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const toSafeError = (value?: string) => {
-  if (!value) return null;
-  return value.length > 1500 ? `${value.slice(0, 1500)}...` : value;
-};
-
-const persistDeliveryLogs = async (
-  eventId: number,
-  rows: Array<{ email: string; alumniId?: number; ok: boolean; error?: string; providerMessageId?: string }>,
-) => {
-  if (!supabase || rows.length === 0) return;
-
-  const attemptedAt = new Date().toISOString();
-  const payload = rows.map((row) => ({
-    event_id: eventId,
-    alumni_id: row.alumniId ?? null,
-    email: row.email,
-    delivery_channel: "event_invite",
-    delivery_status: row.ok ? "sent" : "failed",
-    error_message: toSafeError(row.error),
-    provider: "resend",
-    provider_message_id: row.providerMessageId ?? null,
-    attempted_at: attemptedAt,
-  }));
-
-  const { error } = await supabase.from("event_email_delivery_logs").insert(payload);
-  if (error) {
-    console.error("Failed to persist invite delivery logs", {
-      eventId,
-      count: payload.length,
-      message: error.message,
-    });
-  }
-};
-
 const hashToken = async (token: string) => {
   const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -246,13 +212,13 @@ serve(async (req) => {
   }
 
   // Send emails in batches (2 at a time) with delay between each batch
-  const sendResults: Array<{ email: string; alumniId?: number; ok: boolean; error?: string; providerMessageId?: string }> = [];
+  const sendResults: Array<{ email: string; ok: boolean; error?: string }> = [];
 
   for (let index = 0; index < tokenRows.length; index += BATCH_SIZE) {
     const currentBatch = tokenRows.slice(index, index + BATCH_SIZE);
 
     const batchResults = await Promise.all(
-      currentBatch.map(async ({ rawToken, email, alumni_id }) => {
+      currentBatch.map(async ({ rawToken, email }) => {
         const yesUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=going&eventId=${eventId}`;
         const maybeUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=pending&eventId=${eventId}`;
         const noUrl = `${RSVP_FUNCTION_URL}?token=${rawToken}&status=not_going&eventId=${eventId}`;
@@ -280,17 +246,13 @@ serve(async (req) => {
 
         if (!resendRes.ok) {
           const body = await resendRes.text();
-          return { email, alumniId: alumni_id ?? undefined, ok: false, error: body };
+          return { email, ok: false, error: body };
         }
-
-        const responseJson = await resendRes.json().catch(() => null);
-        const providerMessageId = typeof responseJson?.id === "string" ? responseJson.id : undefined;
-        return { email, alumniId: alumni_id ?? undefined, ok: true, providerMessageId };
+        return { email, ok: true };
       }),
     );
 
     sendResults.push(...batchResults);
-    await persistDeliveryLogs(eventId, batchResults);
 
     const hasRemaining = index + BATCH_SIZE < tokenRows.length;
     if (hasRemaining) {

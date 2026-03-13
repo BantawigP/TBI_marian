@@ -1,13 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 
-<<<<<<< HEAD
-const SUPABASE_URL = 'https://ltngockfkbcgjyksbkyb.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_ikR268SzyQdhdMiJxKV1qg_w8M6RMOf'
-
-console.log('Testing Supabase Connection...')
-console.log('URL:', SUPABASE_URL)
-console.log('Key (first 20 chars):', SUPABASE_ANON_KEY.substring(0, 20) + '...')
-=======
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY
 
@@ -17,7 +9,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 console.log('Testing Supabase Connection...')
 console.log('URL:', SUPABASE_URL)
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 

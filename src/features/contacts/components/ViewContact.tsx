@@ -1,21 +1,12 @@
 import { X, Mail, Phone, Building2, GraduationCap, Briefcase, Calendar, MapPin } from 'lucide-react';
 import { useState } from 'react';
-<<<<<<< HEAD:src/components/ViewContact.tsx
-import type { Contact } from '../types';
-import { sendVerificationEmail } from './email/sendVerificationEmail';
-=======
 import type { Contact } from '../../../types';
 import { sendVerificationEmail } from '../../auth/services/email/sendVerificationEmail';
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b:src/features/contacts/components/ViewContact.tsx
 
 interface ViewContactProps {
   contact: Contact;
   onClose: () => void;
   onEdit: (contact: Contact) => void;
-<<<<<<< HEAD:src/components/ViewContact.tsx
-  // Optional callback to update contact status (e.g. after email verification)
-=======
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b:src/features/contacts/components/ViewContact.tsx
   onUpdateStatus?: (contact: Contact) => void;
 }
 

@@ -12,12 +12,6 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-<<<<<<< HEAD
-console.log("SUPABASE_URL set:", !!SUPABASE_URL);
-console.log("SUPABASE_SERVICE_ROLE_KEY set:", !!SUPABASE_SERVICE_ROLE_KEY);
-
-=======
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
 const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
@@ -38,11 +32,6 @@ serve(async (req) => {
     const body = await req.json();
     const token = body?.token as string | undefined;
 
-<<<<<<< HEAD
-    console.log("Received token:", token ? token.substring(0, 8) + "..." : "none");
-
-=======
->>>>>>> d6770a6c5839df08cc3a49078206a5268cc7140b
     if (!token) {
       return new Response(JSON.stringify({ error: "Missing token" }), {
         status: 400,

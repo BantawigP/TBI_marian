@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { Contact, ContactStatus } from '../../../types';
 import type { ParseResult } from 'papaparse';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { PopupDialog } from '../../shared/components/PopupDialog';
 
 interface ImportContactProps {
@@ -99,23 +99,44 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
 
   const parseExcel = async (file: File): Promise<Contact[]> => {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
 
-    const contacts = rows
-      .map(normalizeRow)
-      .filter((c): c is Contact => c !== null);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) return [];
 
-    return contacts;
+    // Read the header row (row 1)
+    const headers: string[] = [];
+    sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      headers[colNumber - 1] = String(cell.value ?? '');
+    });
+
+    // Convert data rows (row 2+) to plain objects
+    const rows: Record<string, string>[] = [];
+    for (let i = 2; i <= sheet.rowCount; i++) {
+      const rowObj: Record<string, string> = {};
+      sheet.getRow(i).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const header = headers[colNumber - 1];
+        if (header) rowObj[header] = String(cell.value ?? '');
+      });
+      // Skip entirely empty rows
+      if (Object.values(rowObj).some((v) => v.trim())) {
+        rows.push(rowObj);
+      }
+    }
+
+    return rows.map(normalizeRow).filter((c): c is Contact => c !== null);
   };
 
   const parseFile = async (file: File): Promise<Contact[]> => {
     const lower = file.name.toLowerCase();
     if (lower.endsWith('.csv')) return parseCsv(file);
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return parseExcel(file);
-    throw new Error('Unsupported file type. Please upload CSV or Excel (.xlsx, .xls).');
+    if (lower.endsWith('.xlsx')) return parseExcel(file);
+    if (lower.endsWith('.xls'))
+      throw new Error(
+        'Legacy .xls files are not supported. Please open the file in Excel and save it as .xlsx, then re-upload.'
+      );
+    throw new Error('Unsupported file type. Please upload a CSV or Excel (.xlsx) file.');
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,14 +251,14 @@ export function ImportContact({ onClose, onImport }: ImportContactProps) {
                         Choose File
                         <input
                           type="file"
-                          accept=".csv,.xlsx,.xls"
+                          accept=".csv,.xlsx"
                           onChange={handleFileUpload}
                           className="hidden"
                         />
                       </label>
                     </div>
                     <p className="text-xs text-gray-400">
-                      Supported formats: CSV, Excel (.xlsx, .xls)
+                      Supported formats: CSV, Excel (.xlsx)
                     </p>
                   </div>
                 </div>
